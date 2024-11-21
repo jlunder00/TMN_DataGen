@@ -1,0 +1,13 @@
+spacy
+omegaconf
+diaparser
+boto3
+multiprocess
+numpy
+pyarrow
+pandas
+polars
+tqdm
+torch
+scipy
+scikit-learn
