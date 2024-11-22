@@ -9,8 +9,8 @@ with open(os.path.dirname(__file__) + "/requirements.txt", "r") as R:
 
 setup(
     name="TMN_DataGen",
-    version = '0.0.0',
-    description="Tools to convert text into lemma dependency trees formatted for TMN training",
+    version = '0.1.0',
+    description="Tree Matching Network Data Generator",
     url="git@github.com:jlunder00/TMN_DataGen.git",
     author="Jason Lunder",
     packages=find_packages(),
