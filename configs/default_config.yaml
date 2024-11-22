@@ -1,0 +1,13 @@
+parser:
+  type: diaparser
+  batch_size: 32
+  model_name: en
+  
+feature_extraction:
+  word_embedding_model: bert-base-uncased
+  include_pos_tags: true
+  include_dependencies: true
+  
+processing:
+  max_sequence_length: 128
+  lowercase: true
