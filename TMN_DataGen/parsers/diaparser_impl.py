@@ -1,9 +1,12 @@
+#diaparser_impl.py
+
 from .base_parser import BaseTreeParser
 from ..tree.node import Node
 from ..tree.dependency_tree import DependencyTree
 from diaparser.parsers import Parser
 from typing import List, Any, Optional, Tuple
 from omegaconf import DictConfig
+import numpy as np
 
 class DiaParserTreeParser(BaseTreeParser):
     def __init__(self, config: Optional[DictConfig] = None):
@@ -104,3 +107,18 @@ class DiaParserTreeParser(BaseTreeParser):
                 parent.add_child(nodes[idx], dep_label)
         
         return DependencyTree(root)
+
+    def _create_node_features(self, node: Node) -> np.ndarray:
+        from ..utils.feature_utils import FeatureExtractor
+        extractor = FeatureExtractor(self.config)
+        features = extractor.create_node_features(
+            node, 
+            self.config.get('feature_extraction', {})
+        )
+        return features.numpy()
+    
+    def _create_edge_features(self, dependency_type: str) -> np.ndarray:
+        from ..utils.feature_utils import FeatureExtractor
+        extractor = FeatureExtractor(self.config)
+        features = extractor.create_edge_features(dependency_type)
+        return features.numpy()

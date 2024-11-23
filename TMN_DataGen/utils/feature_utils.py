@@ -1,65 +1,80 @@
+# TMN_DataGen/TMN_DataGen/utils/feature_utils.py
 import torch
-from typing import Dict, List
+from typing import Dict, List, Optional
 from transformers import AutoTokenizer, AutoModel
+from omegaconf import DictConfig
 
 class FeatureExtractor:
     _instance = None
     
-    def __new__(cls):
+    def __new__(cls, config: Optional[DictConfig] = None):
         if cls._instance is None:
             cls._instance = super(FeatureExtractor, cls).__new__(cls)
         return cls._instance
     
-    def __init__(self):
+    def __init__(self, config: Optional[DictConfig] = None):
         if not hasattr(self, 'initialized'):
-            self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-            self.model = AutoModel.from_pretrained('bert-base-uncased')
-            self.pos_tag_map = self._create_pos_tag_map()
-            self.dep_type_map = self._create_dep_type_map()
+            self.config = config or {}
+            
+            # Load model configurations
+            model_name = self.config.get('feature_extraction', {}).get(
+                'word_embedding_model', 'bert-base-uncased')
+            
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.model = AutoModel.from_pretrained(model_name)
+            
+            # Load feature mappings from config
+            self.feature_mappings = self.config.get('feature_mappings', {
+                'pos_tags': self._default_pos_tags(),
+                'dep_types': self._default_dep_types(),
+                'morph_features': self._default_morph_features()
+            })
+            
             self.initialized = True
     
-    def _create_pos_tag_map(self) -> Dict[str, int]:
-        """Create mapping for POS tags"""
-        common_pos_tags = ['NOUN', 'VERB', 'ADJ', 'ADV', 'DET', 'ADP', 'NUM', 
-                          'PRON', 'CONJ', 'PART', 'PUNCT']
-        return {tag: idx for idx, tag in enumerate(common_pos_tags)}
+    def _default_pos_tags(self) -> List[str]:
+        return ['NOUN', 'VERB', 'ADJ', 'ADV', 'DET', 'ADP', 'NUM', 
+                'PRON', 'CONJ', 'PART', 'PUNCT']
     
-    def _create_dep_type_map(self) -> Dict[str, int]:
-        """Create mapping for dependency types"""
-        common_deps = ['nsubj', 'obj', 'iobj', 'det', 'nmod', 'amod', 'advmod',
-                      'nummod', 'appos', 'conj', 'cc', 'punct']
-        return {dep: idx for idx, dep in enumerate(common_deps)}
+    def _default_dep_types(self) -> List[str]:
+        return ['nsubj', 'obj', 'iobj', 'det', 'nmod', 'amod', 'advmod',
+                'nummod', 'appos', 'conj', 'cc', 'punct']
+    
+    def _default_morph_features(self) -> List[str]:
+        return ['Number', 'Person', 'Tense', 'VerbForm', 'Case']
     
     def get_word_embedding(self, word: str) -> torch.Tensor:
-        """Get BERT embedding for a word"""
         inputs = self.tokenizer(word, return_tensors='pt', padding=True)
         with torch.no_grad():
             outputs = self.model(**inputs)
-        # Use mean of all token embeddings for the word
         return outputs.last_hidden_state.mean(dim=1).squeeze()
     
-    def get_pos_embedding(self, pos_tag: str) -> torch.Tensor:
-        """Convert POS tag to one-hot embedding"""
-        idx = self.pos_tag_map.get(pos_tag, len(self.pos_tag_map))
-        embedding = torch.zeros(len(self.pos_tag_map) + 1)
+    def get_feature_embedding(self, feature_value: str, feature_type: str) -> torch.Tensor:
+        """Generic one-hot embedding for any feature type"""
+        feature_list = self.feature_mappings.get(feature_type, [])
+        idx = feature_list.index(feature_value) if feature_value in feature_list else len(feature_list)
+        embedding = torch.zeros(len(feature_list) + 1)
         embedding[idx] = 1.0
         return embedding
     
-    def get_dep_embedding(self, dep_type: str) -> torch.Tensor:
-        """Convert dependency type to one-hot embedding"""
-        idx = self.dep_type_map.get(dep_type, len(self.dep_type_map))
-        embedding = torch.zeros(len(self.dep_type_map) + 1)
-        embedding[idx] = 1.0
-        return embedding
+    def create_node_features(self, node, feature_config: Dict) -> torch.Tensor:
+        """Create complete feature vector for a node based on config"""
+        features = []
+        
+        if feature_config.get('use_word_embeddings', True):
+            features.append(self.get_word_embedding(node.word))
+        
+        if feature_config.get('use_pos_tags', True):
+            features.append(self.get_feature_embedding(node.pos_tag, 'pos_tags'))
+        
+        if feature_config.get('use_morph_features', False):
+            for morph_feat in self.feature_mappings['morph_features']:
+                feat_value = node.features.get(morph_feat, '')
+                features.append(self.get_feature_embedding(feat_value, f'morph_{morph_feat}'))
+        
+        return torch.cat(features)
+    
+    def create_edge_features(self, dep_type: str) -> torch.Tensor:
+        """Create feature vector for an edge"""
+        return self.get_feature_embedding(dep_type, 'dep_types')
 
-def create_node_features(node) -> torch.Tensor:
-    """Create feature vector for a node"""
-    extractor = FeatureExtractor()
-    word_emb = extractor.get_word_embedding(node.word)
-    pos_emb = extractor.get_pos_embedding(node.pos_tag)
-    return torch.cat([word_emb, pos_emb])
-
-def create_edge_features(dep_type: str) -> torch.Tensor:
-    """Create feature vector for an edge"""
-    extractor = FeatureExtractor()
-    return extractor.get_dep_embedding(dep_type)

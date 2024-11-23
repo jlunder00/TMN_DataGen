@@ -8,50 +8,48 @@ from ..tree.dependency_tree import DependencyTree
 
 class MultiParser(BaseTreeParser):
     def __init__(self, config: Optional[DictConfig] = None):
+        self.parsers = {}
         super().__init__(config)
-        if not hasattr(self, 'initialized'):
-            self.parsers = {}
-            self.config = config or {}
-            
-            # Initialize requested parsers
-            parser_configs = self.config.get('parsers', {
-                'diaparser': {'enabled': True},
-                'spacy': {'enabled': False}
-            })
-            
-            if parser_configs.get('diaparser', {}).get('enabled', True):
-                self.parsers['diaparser'] = DiaParserTreeParser(
-                    parser_configs.get('diaparser', {})
-                )
-            
-            if parser_configs.get('spacy', {}).get('enabled', False):
-                self.parsers['spacy'] = SpacyTreeParser(
-                    parser_configs.get('spacy', {})
-                )
-            
-            # Configure which parser to use for which features
-            self.feature_sources = self.config.get('feature_sources', {
-                'tree_structure': 'diaparser',  # Use diaparser for basic tree structure
-                'pos_tags': 'spacy',           # Use spacy for POS tags
-                'morph': 'spacy',              # Use spacy for morphological features
-                'lemmas': 'spacy'              # Use spacy for lemmatization
-            })
-            
-            self.initialized = True
-    
+        
+        # Initialize requested parsers
+        parser_configs = self.config.get('parser', {}).get('parsers', {})
+        
+        if parser_configs.get('diaparser', {}).get('enabled', True):
+            self.parsers['diaparser'] = DiaParserTreeParser(
+                self.config
+            )
+        
+        if parser_configs.get('spacy', {}).get('enabled', True):
+            self.parsers['spacy'] = SpacyTreeParser(
+                self.config
+            )
+        
+        # Configure feature sources
+        self.feature_sources = self.config.get('parser', {}).get('feature_sources', {
+            'tree_structure': 'diaparser',
+            'pos_tags': 'spacy',
+            'morph': 'spacy',
+            'lemmas': 'spacy'
+        })
+        
+        self.initialized = True
+
     def parse_batch(self, sentences: List[str]) -> List[DependencyTree]:
         # Get parses from all enabled parsers
-        parser_results = {
-            name: parser.parse_batch(sentences)
-            for name, parser in self.parsers.items()
-        }
+        parser_results = {}
+        for name, parser in self.parsers.items():
+            parser_results[name] = parser.parse_batch(sentences)
         
         # Combine results into final trees
         combined_trees = []
         for i in range(len(sentences)):
             # Start with the base tree structure from preferred parser
             base_parser = self.feature_sources['tree_structure']
+            if base_parser not in parser_results:
+                raise ValueError(f"Base parser {base_parser} not available")
+            
             base_tree = parser_results[base_parser][i]
+            base_tree.config = self.config  # Propagate config
             
             # Enhance with features from other parsers
             self._enhance_tree(
@@ -62,7 +60,7 @@ class MultiParser(BaseTreeParser):
             combined_trees.append(base_tree)
         
         return combined_trees
-    
+
     def _enhance_tree(self, base_tree: DependencyTree, 
                      parser_trees: Dict[str, DependencyTree]):
         """Enhance base tree with features from other parsers"""

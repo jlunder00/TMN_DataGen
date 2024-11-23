@@ -1,3 +1,4 @@
+#setup.py
 import os
 from setuptools import setup, find_packages
 
@@ -9,10 +10,9 @@ with open(os.path.dirname(__file__) + "/requirements.txt", "r") as R:
 
 setup(
     name="TMN_DataGen",
-    version = '0.1.0',
+    version='0.2.5',
     description="Tree Matching Network Data Generator",
-    url="git@github.com:jlunder00/TMN_DataGen.git",
-    author="Jason Lunder",
+    author="toast",
     packages=find_packages(),
     install_requires=requirements,
     zip_safe=False,

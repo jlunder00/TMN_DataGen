@@ -1,3 +1,5 @@
+#run.py
+#currently using for system testing.
 from TMN_DataGen import DatasetGenerator
 from omegaconf import OmegaConf
 

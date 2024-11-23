@@ -1,13 +1,16 @@
+# TMN_DataGen/configs/default_config.yaml
 parser:
   type: diaparser
   batch_size: 32
-  model_name: en
+  model_name: en_ewt.electra-base
   
 feature_extraction:
   word_embedding_model: bert-base-uncased
-  include_pos_tags: true
-  include_dependencies: true
+  use_word_embeddings: true
+  use_pos_tags: true
+  use_morph_features: false
   
 processing:
   max_sequence_length: 128
   lowercase: true
+

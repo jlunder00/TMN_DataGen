@@ -1,6 +1,7 @@
+#dataset_generator.py
 from typing import List, Tuple, Optional, Dict
 from omegaconf import DictConfig
-from .parsers import DiaParserTreeParser, SpacyTreeParser
+from .parsers import DiaParserTreeParser, SpacyTreeParser, MultiParser
 from .tree import DependencyTree
 import torch
 import numpy as np
@@ -12,11 +13,12 @@ from pathlib import Path
 class DatasetGenerator:
     def __init__(self, config: Optional[DictConfig] = None):
         self.config = config or {}
-        parser_type = self.config.get('parser_type', 'diaparser')
+        parser_type = self.config.get('parser', {}).get('type', 'diaparser')
         self.parser = {
             "diaparser": DiaParserTreeParser,
-            "spacy": SpacyTreeParser
-        }[parser_type](config)
+            "spacy": SpacyTreeParser,
+            "multi": MultiParser
+        }[parser_type]
         
         self.label_map = {
             'entails': 1,

@@ -3,6 +3,7 @@
 Definition of the Edge object, which is a connection between two nodes
 
 """
+#this may not be necessary anymore
 
 import sys, os, re, json, typing
 
