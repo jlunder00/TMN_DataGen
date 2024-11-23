@@ -34,14 +34,55 @@ class BaseTreeParser(ABC):
         """Parse a single sentence into a dependency tree"""
         pass
     
+    # def parse_all(self, sentences: List[str], show_progress: bool = True) -> List[DependencyTree]:
+    #     """Parse all sentences with batching and progress bar"""
+    #     if not isinstance(sentences, list):
+    #         raise TypeError("sentences must be a list of strings")
+    #     
+    #     trees = []
+    #     iterator = range(0, len(sentences), self.batch_size)
+    #     if show_progress:
+    #         iterator = tqdm(iterator, desc="Parsing sentences")
+    #         
+    #     for i in iterator:
+    #         batch = sentences[i:i + self.batch_size]
+    #         trees.extend(self.parse_batch(batch))
+    #     return trees
+
     def parse_all(self, sentences: List[str], show_progress: bool = True) -> List[DependencyTree]:
         """Parse all sentences with batching and progress bar"""
-        trees = []
-        iterator = range(0, len(sentences), self.batch_size)
-        if show_progress:
-            iterator = tqdm(iterator, desc="Parsing sentences")
+        if not isinstance(sentences, list):
+            sentences = list(sentences)  # Try to convert to list if possible
+        
+        if not sentences:  # Handle empty input
+            return []
             
-        for i in iterator:
-            batch = sentences[i:i + self.batch_size]
+        if not all(isinstance(s, str) for s in sentences):
+            raise TypeError("All elements must be strings")
+        
+        trees = []
+        total_sentences = len(sentences)
+        
+        # Create batches
+        for i in range(0, total_sentences, self.batch_size):
+            batch = sentences[i:min(i + self.batch_size, total_sentences)]
+            if show_progress:
+                print(f"\rProcessing {i+1}/{total_sentences} sentences...", end="")
             trees.extend(self.parse_batch(batch))
+        
+        if show_progress:
+            print("\nDone!")
+    
         return trees
+
+    # def parse_all(self, sentences: List[str], show_progress: bool = True) -> List[DependencyTree]:
+    #     """Parse all sentences with batching and progress bar"""
+    #     trees = []
+    #     iterator = range(0, len(sentences), self.batch_size)
+    #     if show_progress:
+    #         iterator = tqdm(iterator, desc="Parsing sentences")
+    #         
+    #     for i in iterator:
+    #         batch = sentences[i:i + self.batch_size]
+    #         trees.extend(self.parse_batch(batch))
+    #     return trees

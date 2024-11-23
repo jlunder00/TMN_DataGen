@@ -26,50 +26,75 @@ class DatasetGenerator:
             'neutral': 0
         }
     
-    def generate_dataset(self, 
-                        sentence_pairs: List[Tuple[str, str]], 
-                        labels: List[str],
+    # def generate_dataset(self, 
+    #                     sentence_pairs: List[Tuple[str, str]], 
+    #                     labels: List[str],
+    #                     output_path: str,
+    #                     show_progress: bool = True):
+    #     """Generate and save dataset in GMN-compatible format"""
+    #     # Parse all sentences
+    #     all_sentences = []
+    #     for premise, hypothesis in sentence_pairs:
+    #         all_sentences.extend([premise, hypothesis])
+    #         
+    #     print("Parsing sentences...")
+    #     all_trees = self.parser.parse_all(all_sentences, show_progress)
+    #     
+    #     # Pair trees
+    #     tree_pairs = []
+    #     for i in range(0, len(all_trees), 2):
+    #         tree_pairs.append((all_trees[i], all_trees[i+1]))
+    #     
+    #     # Convert to GMN format
+    #     print("Converting to GMN format...")
+    #     dataset = self._convert_to_gmn_format(tree_pairs, labels)
+    #     
+    #     # Save dataset
+    #     print(f"Saving dataset to {output_path}")
+    #     self._save_dataset(dataset, output_path)
+
+    def generate_dataset(self, sentence_pairs: List[Tuple[str, str]], 
+                        labels: List[str], 
                         output_path: str,
-                        show_progress: bool = True):
-        """Generate and save dataset in GMN-compatible format"""
+                        show_progress: bool = True) -> None:
+        """Generate dataset from sentence pairs and labels"""
+        # Flatten sentences for parsing
+        all_sentences = [s for pair in sentence_pairs for s in pair]
+        
         # Parse all sentences
-        all_sentences = []
-        for premise, hypothesis in sentence_pairs:
-            all_sentences.extend([premise, hypothesis])
-            
         print("Parsing sentences...")
         all_trees = self.parser.parse_all(all_sentences, show_progress)
         
-        # Pair trees
-        tree_pairs = []
-        for i in range(0, len(all_trees), 2):
-            tree_pairs.append((all_trees[i], all_trees[i+1]))
+        # Pair up trees
+        tree_pairs = [
+            (all_trees[i], all_trees[i+1]) 
+            for i in range(0, len(all_trees), 2)
+        ]
         
-        # Convert to GMN format
         print("Converting to GMN format...")
         dataset = self._convert_to_gmn_format(tree_pairs, labels)
         
         # Save dataset
-        print(f"Saving dataset to {output_path}")
-        self._save_dataset(dataset, output_path)
-    
-    def _convert_to_gmn_format(self, 
-                              tree_pairs: List[Tuple[DependencyTree, DependencyTree]],
-                              labels: List[str]) -> Dict:
-        """Convert tree pairs to GMN-compatible format"""
-        graph_pairs = []
-        numeric_labels = []
+        with open(output_path, 'wb') as f:
+            pickle.dump(dataset, f)
         
-        for (tree1, tree2), label in zip(tree_pairs, labels):
-            graph1 = tree1.to_graph_data()
-            graph2 = tree2.to_graph_data()
-            graph_pairs.append((graph1, graph2))
-            numeric_labels.append(self.label_map[label])
-        
-        return {
-            'graph_pairs': graph_pairs,
-            'labels': numeric_labels
-        }
+        def _convert_to_gmn_format(self, 
+                                  tree_pairs: List[Tuple[DependencyTree, DependencyTree]],
+                                  labels: List[str]) -> Dict:
+            """Convert tree pairs to GMN-compatible format"""
+            graph_pairs = []
+            numeric_labels = []
+            
+            for (tree1, tree2), label in zip(tree_pairs, labels):
+                graph1 = tree1.to_graph_data()
+                graph2 = tree2.to_graph_data()
+                graph_pairs.append((graph1, graph2))
+                numeric_labels.append(self.label_map[label])
+            
+            return {
+                'graph_pairs': graph_pairs,
+                'labels': numeric_labels
+            }
     
     def _save_dataset(self, dataset: Dict, output_path: str):
         """Save dataset to file"""
