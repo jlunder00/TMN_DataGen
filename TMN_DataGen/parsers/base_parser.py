@@ -51,14 +51,12 @@ class BaseTreeParser(ABC):
 
     def parse_all(self, sentences: List[str], show_progress: bool = True) -> List[DependencyTree]:
         """Parse all sentences with batching and progress bar"""
+        # First ensure sentences is a list
         if not isinstance(sentences, list):
-            sentences = list(sentences)  # Try to convert to list if possible
-        
-        if not sentences:  # Handle empty input
-            return []
-            
-        if not all(isinstance(s, str) for s in sentences):
-            raise TypeError("All elements must be strings")
+            if hasattr(sentences, '__iter__'):  # Check if it's iterable
+                sentences = list(sentences)
+            else:
+                raise TypeError("sentences must be a list of strings")
         
         trees = []
         total_sentences = len(sentences)
@@ -72,8 +70,34 @@ class BaseTreeParser(ABC):
         
         if show_progress:
             print("\nDone!")
-    
+        
         return trees
+
+    # def parse_all(self, sentences: List[str], show_progress: bool = True) -> List[DependencyTree]:
+    #     """Parse all sentences with batching and progress bar"""
+    #     if not isinstance(sentences, list):
+    #         sentences = list(sentences)  # Try to convert to list if possible
+    #     
+    #     if not sentences:  # Handle empty input
+    #         return []
+    #         
+    #     if not all(isinstance(s, str) for s in sentences):
+    #         raise TypeError("All elements must be strings")
+    #     
+    #     trees = []
+    #     total_sentences = len(sentences)
+    #     
+    #     # Create batches
+    #     for i in range(0, total_sentences, self.batch_size):
+    #         batch = sentences[i:min(i + self.batch_size, total_sentences)]
+    #         if show_progress:
+    #             print(f"\rProcessing {i+1}/{total_sentences} sentences...", end="")
+    #         trees.extend(self.parse_batch(batch))
+    #     
+    #     if show_progress:
+    #         print("\nDone!")
+    # 
+    #     return trees
 
     # def parse_all(self, sentences: List[str], show_progress: bool = True) -> List[DependencyTree]:
     #     """Parse all sentences with batching and progress bar"""

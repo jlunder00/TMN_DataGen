@@ -61,6 +61,30 @@ class MultiParser(BaseTreeParser):
         
         return combined_trees
 
+    def _enhance_tree(self, base_tree: DependencyTree, parser_trees: Dict[str, DependencyTree]):
+        base_nodes = {node.idx: node for node in base_tree.root.get_subtree_nodes()}
+        
+        for feature, parser_name in self.feature_sources.items():
+            if parser_name not in parser_trees:
+                continue
+                
+            other_tree = parser_trees[parser_name]
+            other_nodes = {node.idx: node for node in other_tree.root.get_subtree_nodes()}
+            
+            for idx, base_node in base_nodes.items():
+                if idx in other_nodes:
+                    other_node = other_nodes[idx]
+                    if feature == 'pos_tags':
+                        base_node.pos_tag = other_node.pos_tag
+                    elif feature == 'lemmas':
+                        base_node.lemma = other_node.lemma
+                    elif feature == 'morph':
+                        # Ensure morph_features exists in features dict
+                        if 'morph_features' not in base_node.features:
+                            base_node.features['morph_features'] = {}
+                        # Copy morph features from spacy
+                        base_node.features['morph_features'].update(other_node.features.get('morph_features', {}))
+
     def _enhance_tree(self, base_tree: DependencyTree, 
                      parser_trees: Dict[str, DependencyTree]):
         """Enhance base tree with features from other parsers"""

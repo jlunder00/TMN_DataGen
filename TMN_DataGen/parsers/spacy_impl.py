@@ -1,5 +1,4 @@
 #spacy_impl.py
-
 from .base_parser import BaseTreeParser
 from ..tree.node import Node
 from ..tree.dependency_tree import DependencyTree
@@ -23,14 +22,18 @@ class SpacyTreeParser(BaseTreeParser):
         return self._convert_to_tree(doc)
     
     def _convert_to_tree(self, doc: Any) -> DependencyTree:
-        # Create nodes
         nodes = [
             Node(
                 word=token.text,
                 lemma=token.lemma_,
                 pos_tag=token.pos_,
                 idx=token.i,
-                features={'original_text': token.text}
+                features={
+                    'original_text': token.text,
+                    'morph_features': dict(feature.split('=') 
+                                         for feature in str(token.morph).split('|')
+                                         if feature != '')  # Handle empty morph case
+                }
             )
             for token in doc
         ]
