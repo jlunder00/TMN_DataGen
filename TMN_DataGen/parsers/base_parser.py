@@ -54,13 +54,13 @@ class BaseTreeParser(ABC):
         trees = []
         total_sentences = len(sentences)
         
-        if self.verbose == 'normal':
+        if self.verbose == 'normal' or self.verbose == 'debug':
             self.logger.info(f"Processing {total_sentences} sentences total...")
         
         # Create batches
         for i in range(0, total_sentences, self.batch_size):
             batch = sentences[i:min(i + self.batch_size, total_sentences)]
-            if show_progress and self.verbose == 'normal':
+            if show_progress and self.verbose == 'normal' or self.verbose == 'debug':
                 self.logger.info(f"Processing batch {i//self.batch_size + 1}...")
             
             batch_trees = self.parse_batch(batch)
@@ -75,7 +75,7 @@ class BaseTreeParser(ABC):
             
             trees.extend(batch_trees)
         
-        if show_progress and self.verbose == 'normal':
+        if show_progress and self.verbose == 'normal' or self.verbose == 'debug':
             self.logger.info("Done!")
         
         return trees

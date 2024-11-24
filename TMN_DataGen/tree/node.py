@@ -1,5 +1,4 @@
 #node.py
-
 from typing import List, Tuple, Optional, Dict, Any
 import numpy as np
 
@@ -69,6 +68,41 @@ class Node:
     def get_subtree_nodes(self):
         """Get all nodes in the subtree rooted at this node"""
         return list(self.traverse_preorder())
+
+    def verify_tree_structure(self) -> bool:
+        """
+        Verify tree structure is valid:
+        - No cycles
+        - All parent pointers match children lists
+        - Each node appears exactly once
+        """
+        visited = set()
+        
+        def _verify_subtree(node: 'Node') -> bool:
+            if node.idx in visited:
+                return False
+            visited.add(node.idx)
+            
+            # Verify parent-child consistency
+            for child, dep_type in node.children:
+                if child.parent is not node:
+                    return False
+                if child.dependency_to_parent != dep_type:
+                    return False
+                if not _verify_subtree(child):
+                    return False
+            return True
+            
+        return _verify_subtree(self)
+    
+    def __str__(self) -> str:
+        """String representation for debugging"""
+        dep_info = f" --{self.dependency_to_parent}-->" if self.dependency_to_parent else ""
+        return f"{self.word}({self.pos_tag}){dep_info}"
+    
+    def __repr__(self) -> str:
+        """Detailed representation for debugging"""
+        return f"Node(word='{self.word}', pos='{self.pos_tag}', idx={self.idx})"
     
     def to_dict(self) -> Dict:
         """Convert node to dictionary representation"""
@@ -93,3 +127,4 @@ class Node:
         )
         node.dependency_to_parent = data['dependency_to_parent']
         return node
+

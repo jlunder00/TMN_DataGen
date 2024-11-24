@@ -14,6 +14,42 @@ def base_config():
         }
     })
 
+def test_diaparser_detailed(base_config):
+    """Detailed test of DiaParser tree construction"""
+    config = OmegaConf.merge(base_config, {
+        'parser': {
+            'type': 'diaparser',
+            'verbose': 'debug'
+        }
+    })
+    parser = DiaParserTreeParser(config)
+    
+    # Test simple sentence
+    sentence = "The cat chases the mouse."
+    trees = parser.parse_all([sentence])
+    assert len(trees) == 1
+    
+    tree = trees[0]
+    nodes = tree.root.get_subtree_nodes()
+    
+    # Verify basic structure
+    assert len(nodes) == 5  # should have 5 words
+    assert tree.root.word == "chases"  # main verb should be root
+    assert tree.root.pos_tag == "VERB"
+    
+    # Find subject and object
+    subj = [n for n, t in tree.root.children if t == "nsubj"][0]
+    obj = [n for n, t in tree.root.children if t == "obj"][0]
+    
+    assert subj.word == "cat"
+    assert obj.word == "mouse"
+    
+    # Check determiners
+    assert len(subj.children) == 1
+    assert len(obj.children) == 1
+    assert subj.children[0][0].word == "The"
+    assert obj.children[0][0].word == "the"
+
 def test_diaparser(base_config):
     config = OmegaConf.merge(base_config, {
         'parser': {
@@ -23,7 +59,7 @@ def test_diaparser(base_config):
     parser = DiaParserTreeParser(config)
     
     sentence = "The cat chases the mouse."
-    tree = parser.parse_single(sentence)
+    tree = parser.parse_all([sentence])
     
     # Check tree structure
     assert tree.root is not None
