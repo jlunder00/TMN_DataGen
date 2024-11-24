@@ -1,25 +1,55 @@
 # TMN_DataGen/TMN_DataGen/utils/logging_config.py
+# TMN_DataGen/TMN_DataGen/utils/logging_config.py
 import logging
 import sys
+from typing import Optional
 
-def setup_logging(level=logging.INFO):
-    # Create root logger
-    root_logger = logging.getLogger("TMN_DataGen")
-    if not root_logger.handlers:  # Only setup if not already configured
-        root_logger.setLevel(level)
+def get_logger(name: str, verbose: Optional[str] = None) -> logging.Logger:
+    """
+    Get a logger with appropriate level based on verbosity setting.
+    
+    Args:
+        name: Logger name
+        verbose: Verbosity level - None/"normal"/"debug"
+    
+    Example:
+        >>> logger = get_logger("MyParser", "debug")
+        >>> logger.debug("Detailed parsing info...")  # Will print
+        >>> 
+        >>> logger = get_logger("MyParser", "normal")
+        >>> logger.debug("Detailed parsing info...")  # Won't print
+        >>> logger.info("Processing complete")  # Will print
+    """
+    logger = logging.getLogger(name)
+    
+    # Only configure if no handlers exist
+    if not logger.handlers:
+        logger.propagate = False  # Don't propagate to root logger
         
         # Create console handler
         console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(level)
         
         # Create formatter
-        formatter = logging.Formatter('%(message)s')  # Simple format for tree visualization
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%H:%M:%S'
+        )
         console_handler.setFormatter(formatter)
         
-        # Add handler to logger
-        root_logger.addHandler(console_handler)
+        # Set levels based on verbosity
+        if verbose == 'debug':
+            logger.setLevel(logging.DEBUG)
+            console_handler.setLevel(logging.DEBUG)
+        elif verbose == 'normal':
+            logger.setLevel(logging.INFO)
+            console_handler.setLevel(logging.INFO)
+        else:
+            logger.setLevel(logging.WARNING)
+            console_handler.setLevel(logging.WARNING)
+        
+        logger.addHandler(console_handler)
     
-    return root_logger
+    return logger
 
-# Create logger instance
-logger = setup_logging()
+# Create root logger
+logger = get_logger("TMN_DataGen")

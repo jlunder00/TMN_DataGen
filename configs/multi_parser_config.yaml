@@ -44,11 +44,6 @@ parser:
     lemmas: spacy
     dependencies: diaparser
     ner: spacy
-  
-  feature_priorities:
-    pos_tags: ["spacy", "diaparser"]
-    lemmas: ["spacy", "diaparser"]
-    dependencies: ["diaparser", "spacy"]
 
 feature_extraction:
   word_embedding_model: bert-base-uncased
@@ -56,54 +51,13 @@ feature_extraction:
   use_pos_tags: true
   use_morph_features: true
   use_entity_types: true
-  
-  feature_mappings:
-    pos_tags: 
-      - NOUN
-      - VERB
-      - ADJ
-      - ADV
-      - DET
-      - ADP
-      - NUM
-      - PRON
-      - CONJ
-      - PART
-      - PUNCT
-    
-    dep_types:
-      - nsubj
-      - obj
-      - iobj
-      - det
-      - nmod
-      - amod
-      - advmod
-      - nummod
-      - appos
-      - conj
-      - cc
-      - punct
-    
-    morph_features:
-      - Number
-      - Person
-      - Tense
-      - VerbForm
-      - Case
-      - Gender
-      - Mood
-    
-    entity_types:
-      - PERSON
-      - ORG
-      - GPE
-      - DATE
-      - CARDINAL
+
+visualization:
+  show_features: true
 
 processing:
   max_sequence_length: 128
   lowercase: true
   merge_subtokens: true
 
-verbose: True
+verbose: "debug"  # Options: null, "normal", "debug"

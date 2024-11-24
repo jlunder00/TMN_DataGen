@@ -1,4 +1,4 @@
-# TMN_DataGen/configs/default_config.yamlA
+# TMN_DataGen/configs/default_config.yaml
 parser:
   type: diaparser
   batch_size: 32
@@ -9,9 +9,12 @@ feature_extraction:
   use_word_embeddings: true
   use_pos_tags: true
   use_morph_features: false
+
+visualization:
+  show_features: false
   
 processing:
   max_sequence_length: 128
   lowercase: true
 
-verbose: True
+verbose: "debug"  # Options: null, "normal", "debug"

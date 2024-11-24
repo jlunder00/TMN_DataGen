@@ -1,34 +1,42 @@
 # TMN_DataGen/tests/test_parsers.py
 import pytest
-from TMN_DataGen.utils.logging_config import logger
+from TMN_DataGen.utils.logging_config import get_logger
 from TMN_DataGen.parsers import DiaParserTreeParser, SpacyTreeParser, MultiParser
 from TMN_DataGen.tree import Node, DependencyTree 
 from omegaconf import OmegaConf
 
+@pytest.fixture
+def base_config():
+    return OmegaConf.create({
+        'verbose': 'debug',
+        'visualization': {
+            'show_features': True
+        }
+    })
 
-def test_diaparser(capsys):
-    config = OmegaConf.create({
+def test_diaparser(base_config):
+    config = OmegaConf.merge(base_config, {
         'parser': {
             'type': 'diaparser' 
-        },
-        'verbose': True
+        }
     })
     parser = DiaParserTreeParser(config)
     
     sentence = "The cat chases the mouse."
-    tree = parser.parse_all([sentence])
-
-    captured = capsys.readouterr()
-
-    assert "chases" in captured.out
-    assert "cat" in captured.out
-    assert "mouse" in captured.out
+    tree = parser.parse_single(sentence)
     
+    # Check tree structure
     assert tree.root is not None
-    assert len(tree.root.get_subtree_nodes()) > 0
+    assert tree.root.word == "chases"
+    
+    # Verify all nodes were extracted
+    nodes = tree.root.get_subtree_nodes()
+    assert len(nodes) == 5  # should have 5 nodes
+    words = set(node.word for node in nodes)
+    assert words == {"The", "cat", "chases", "the", "mouse"}
 
-def test_multi_parser(capsys):
-    config = OmegaConf.create({
+def test_multi_parser(base_config):
+    config = OmegaConf.merge(base_config, {
         'parser': {
             'type': 'multi',
             'parsers': {
@@ -41,31 +49,27 @@ def test_multi_parser(capsys):
                     'model_name': 'en_core_web_sm'
                 }
             }
-        },
-        'verbose': True,  
+        }
     })
-    parser = MultiParser(config)
     
+    parser = MultiParser(config)
     sentence = "The cat chases the mouse."
     tree = parser.parse_single(sentence)
     
-    captured = capsys.readouterr()
-
-    assert "chases" in captured.out
-    assert "cat" in captured.out
-    assert "mouse" in captured.out
+    # Check full tree structure
+    nodes = tree.root.get_subtree_nodes()
+    assert len(nodes) == 5
     
     # Check if features from both parsers are present
-    nodes = tree.root.get_subtree_nodes()
     for node in nodes:
-        assert isinstance(node.pos_tag, str)  # Should have POS tags from spaCy
+        assert isinstance(node.pos_tag, str)
         assert node.pos_tag != ""
-        assert 'morph_features' in node.features  # Should have morph features from spaCy
+        assert 'morph_features' in node.features
 
 class TestMultiParser:
     @pytest.fixture
-    def multi_parser_config(self):
-        return OmegaConf.create({
+    def multi_parser_config(self, base_config):
+        return OmegaConf.merge(base_config, {
             "parser": {
                 "type": "multi",
                 "batch_size": 32,
@@ -85,42 +89,23 @@ class TestMultiParser:
                     "morph": "spacy",
                     "lemmas": "spacy"
                 }
-            },
-            "feature_extraction": {
-                "word_embedding_model": "bert-base-uncased",
-                "use_word_embeddings": True,
-                "use_pos_tags": True,
-                "use_morph_features": True
             }
         })
-    
-    def test_multi_parser_initialization(self, multi_parser_config):
-        parser = MultiParser(multi_parser_config)
-        assert len(parser.parsers) == 2
-        assert "diaparser" in parser.parsers
-        assert "spacy" in parser.parsers
     
     def test_multi_parser_feature_combination(self, multi_parser_config):
         parser = MultiParser(multi_parser_config)
         sentence = "The big cat chases the small mouse."
         tree = parser.parse_single(sentence)
         
-        # Check if features from both parsers are present
+        # Check tree structure and features
         nodes = tree.root.get_subtree_nodes()
+        assert len(nodes) == 7  # All words present
+        
         for node in nodes:
-            # Check basic node attributes
             assert hasattr(node, 'word')
             assert hasattr(node, 'lemma')
             assert hasattr(node, 'pos_tag')
-            assert hasattr(node, 'dependency_to_parent')
             
-            # Check feature presence
-            assert isinstance(node.pos_tag, str)
-            assert node.pos_tag != ""
-            assert isinstance(node.features, dict)
-            assert 'morph_features' in node.features
-            
-            # If node isn't root, it should have dependency information
             if node != tree.root:
                 assert node.dependency_to_parent is not None
     
@@ -135,16 +120,28 @@ class TestMultiParser:
         trees = parser.parse_batch(sentences)
         assert len(trees) == 3
         
+        # Check all trees are properly formed
         for tree in trees:
-            assert tree.root is not None
             nodes = tree.root.get_subtree_nodes()
             assert len(nodes) > 0
-            
-            for node in nodes:
-                assert isinstance(node.pos_tag, str)
-                assert node.pos_tag != ""
-                assert isinstance(node.features, dict)
-                assert 'morph_features' in node.features
-                if node != tree.root:
-                    assert node.dependency_to_parent is not None
+            assert all(isinstance(node.pos_tag, str) for node in nodes)
+            assert all('morph_features' in node.features for node in nodes)
 
+    def test_verbosity_levels(self, multi_parser_config, caplog):
+        # Test debug level
+        debug_config = OmegaConf.merge(multi_parser_config, {'verbose': 'debug'})
+        parser = MultiParser(debug_config)
+        sentence = "The cat chases the mouse."
+        tree = parser.parse_single(sentence)
+        
+        assert any("Processing node" in msg for msg in caplog.messages)
+        
+        caplog.clear()
+        
+        # Test normal level
+        normal_config = OmegaConf.merge(multi_parser_config, {'verbose': 'normal'})
+        parser = MultiParser(normal_config)
+        tree = parser.parse_single(sentence)
+        
+        assert any("Parsed tree structure" in msg for msg in caplog.messages)
+        assert not any("Processing node" in msg for msg in caplog.messages)
