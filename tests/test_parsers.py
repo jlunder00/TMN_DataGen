@@ -1,25 +1,59 @@
 # TMN_DataGen/tests/test_parsers.py
 import pytest
+from TMN_DataGen.utils.logging_config import logger
 from TMN_DataGen.parsers import DiaParserTreeParser, SpacyTreeParser, MultiParser
 from TMN_DataGen.tree import Node, DependencyTree 
 from omegaconf import OmegaConf
 
-def test_diaparser():
-    config = OmegaConf.create({'parser': {'type': 'diaparser'}})
+
+def test_diaparser(capsys):
+    config = OmegaConf.create({
+        'parser': {
+            'type': 'diaparser' 
+        },
+        'verbose': True
+    })
     parser = DiaParserTreeParser(config)
     
     sentence = "The cat chases the mouse."
-    tree = parser.parse_single(sentence)
+    tree = parser.parse_all([sentence])
+
+    captured = capsys.readouterr()
+
+    assert "chases" in captured.out
+    assert "cat" in captured.out
+    assert "mouse" in captured.out
     
     assert tree.root is not None
     assert len(tree.root.get_subtree_nodes()) > 0
 
-def test_multi_parser():
-    config = OmegaConf.load('configs/multi_parser_config.yaml')
+def test_multi_parser(capsys):
+    config = OmegaConf.create({
+        'parser': {
+            'type': 'multi',
+            'parsers': {
+                'diaparser': {
+                    'enabled': True,
+                    'model_name': 'en_ewt.electra-base'
+                },
+                'spacy': {
+                    'enabled': True,
+                    'model_name': 'en_core_web_sm'
+                }
+            }
+        },
+        'verbose': True,  
+    })
     parser = MultiParser(config)
     
     sentence = "The cat chases the mouse."
     tree = parser.parse_single(sentence)
+    
+    captured = capsys.readouterr()
+
+    assert "chases" in captured.out
+    assert "cat" in captured.out
+    assert "mouse" in captured.out
     
     # Check if features from both parsers are present
     nodes = tree.root.get_subtree_nodes()

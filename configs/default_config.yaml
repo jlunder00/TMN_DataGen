@@ -1,4 +1,4 @@
-# TMN_DataGen/configs/default_config.yaml
+# TMN_DataGen/configs/default_config.yamlA
 parser:
   type: diaparser
   batch_size: 32
@@ -14,3 +14,4 @@ processing:
   max_sequence_length: 128
   lowercase: true
 
+verbose: True
