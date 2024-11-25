@@ -29,6 +29,7 @@ python -m spacy download en_core_web_sm
 
 ### DiaParser Models
 The default electra-base model will be downloaded automatically, but other options are available.
+NOTE: Diaparser only gives a dependency parse and dependency roles (usually the best at this), but it does not give lemmas, part of speech, or other text features. Spacy and other models do give this. Included is the multi model configuration to select which features (tree structure, part of speech, lemma, etc.) come from which of multiple models.
 
 ### Model Configuration
 
