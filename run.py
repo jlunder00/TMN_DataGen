@@ -118,13 +118,31 @@ if __name__ == '__main__':
     
     parser.add_argument("-if", "--input_file", type=str, help="input data path")
     parser.add_argument("-od", "--out_dir", type=str, help="output data dir")
-    parser.add_argument("-v", "--verbosity", type=str, default='quiet', help="verbose level: 'quiet', 'normal', or 'debug'")
+    parser.add_argument("--spacy_model", type=str, default="en_core_web_sm",
+                       help="spacy model to use")
     args = parser.parse_args()
+
+    parser_config = {
+        'parser': {
+            'type': 'multi',
+            'parsers': {
+                'diaparser': {
+                    'enabled': True,
+                    'model_name': 'en_ewt.electra-base'
+                },
+                'spacy': {
+                    'enabled': True,
+                    'model_name': args.spacy_model
+                }
+            }
+        }
+    }
+    
     processor = BatchProcessor(
         input_file=args.input_file,
         output_dir=args.out_dir,
-        batch_size=1000,
-        checkpoint_every=3000,
-        verbosity=args.verbosity
+        batch_size=100,
+        checkpoint_every=1000,
+        parser_config=parser_config
     )
     processor.process_all()
