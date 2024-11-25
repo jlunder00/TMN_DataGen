@@ -38,6 +38,9 @@ class BasePreprocessor:
         
         if self.config.preprocessing.remove_punctuation:
             text = re.sub(r'[^\w\s]', ' ', text)
+
+        if not self.config.preprocessing.preserve_case:
+            text = text.lower()
             
         return text
         

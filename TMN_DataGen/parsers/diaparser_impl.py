@@ -11,6 +11,7 @@ class DiaParserTreeParser(BaseTreeParser):
     def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, logger=None):
         super().__init__(config, pkg_config, logger)
         if not hasattr(self, 'model'):
+            self.verbose = self.config.get('verbose', 'normal')
             model_name = self.config.get('model_name', 'en_ewt.electra-base')
             self.model = Parser.load(model_name)
     

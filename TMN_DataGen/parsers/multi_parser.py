@@ -73,7 +73,7 @@ class MultiParser(BaseTreeParser):
 
     def _validate_feature_sources(self):
         """Validate that assigned feature sources are capable"""
-        for feature, parser in self.config.feature_sources.items():
+        for feature, parser in self.config.parser.feature_sources.items():
             if parser not in self.capabilities['parsers']:
                 raise ValueError(f"Unknown parser: {parser}")
             if feature not in self.capabilities['parsers'][parser]['capabilities']:
@@ -85,7 +85,7 @@ class MultiParser(BaseTreeParser):
         """Enhanced version that respects capabilities"""
         base_nodes = {node.idx: node for node in base_tree.root.get_subtree_nodes()}
         
-        for feature, parser_name in self.config.feature_sources.items():
+        for feature, parser_name in self.config.parser.feature_sources.items():
             if parser_name not in parser_trees:
                 continue
 

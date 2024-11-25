@@ -13,5 +13,6 @@ parser:
     pos_tags: spacy
     morph: spacy
     lemmas: spacy
+    dependency_labels: diaparser
 
 
