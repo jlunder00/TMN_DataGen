@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from ..tree.dependency_tree import DependencyTree
 from ..utils.viz_utils import print_tree_text
-from ..utils.logging_config import get_logger
+from ..utils.logging_config import setup_logger
 from ..utils.text_preprocessing import BasePreprocessor
 from ..utils.tokenizers import RegexTokenizer, StanzaTokenizer
 from omegaconf import DictConfig
@@ -13,7 +13,7 @@ from tqdm import tqdm
 class BaseTreeParser(ABC):
     _instances: Dict[str, 'BaseTreeParser'] = {}
     
-    def __new__(cls, config: Optional[DictConfig] = None):
+    def __new__(cls, config=None, pkg_config=None):
         if cls not in cls._instances:
             cls._instances[cls.__name__] = super(BaseTreeParser, cls).__new__(cls)
         return cls._instances[cls.__name__]
@@ -24,13 +24,10 @@ class BaseTreeParser(ABC):
             self.config = config or {}
             self.batch_size = self.config.get('batch_size', 32)
             
-            # Get global verbosity setting
-            self.verbose = self.config.get('verbose')
-            
             # Set up logger
-            self.logger = get_logger(
-                name=self.__class__.__name__,
-                verbose=self.verbose
+            self.logger = setup_logger(
+                self.__class__.__name__,
+                self.config.get('verbose', 'normal')
             )
 
             # Initialize preprocessor

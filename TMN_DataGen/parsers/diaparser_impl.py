@@ -31,9 +31,8 @@ class DiaParserTreeParser(BaseTreeParser):
         """
         sentence = dataset.sentences[0]
         
-        if self.verbose == 'debug':
-            self.logger.debug(f"Processing CoNLL format sentence:")
-            self.logger.debug(f"Raw values: {sentence.values}")
+        self.logger.debug(f"Processing CoNLL format sentence:")
+        self.logger.debug(f"Raw values: {sentence.values}")
         
         def ensure_list(val) -> List[str]:
             """Convert various input formats to list"""
@@ -60,10 +59,9 @@ class DiaParserTreeParser(BaseTreeParser):
                     f"Inconsistent token list lengths: {list_lens}"
                 )
             
-            if self.verbose == 'debug':
-                self.logger.debug("Processed token data:")
-                for key, value in token_data.items():
-                    self.logger.debug(f"{key}: {value}")
+            self.logger.debug("Processed token data:")
+            for key, value in token_data.items():
+                self.logger.debug(f"{key}: {value}")
 
             return token_data
             
@@ -75,16 +73,14 @@ class DiaParserTreeParser(BaseTreeParser):
     def parse_batch(self, sentences: List[str]) -> List[DependencyTree]:
         trees = []
         
-        if self.verbose == 'debug':
-            self.logger.debug(f"Parsing batch of {len(sentences)} sentences")
+        self.logger.debug(f"Parsing batch of {len(sentences)} sentences")
         
         for sentence in sentences:
             
             # Preprocess and tokenize first
             tokens = self.preprocess_and_tokenize(sentence)
 
-            if self.verbose == 'debug':
-                self.logger.debug(f"\nParsing sentence: {sentence}")
+            self.logger.debug(f"\nParsing sentence: {sentence}")
             
             # Get DiaParser output
             dataset = self.model.predict([tokens])
@@ -104,8 +100,7 @@ class DiaParserTreeParser(BaseTreeParser):
                 )
                 nodes.append(node)
                 
-                if self.verbose == 'debug':
-                    self.logger.debug(f"Created node {i}: {node}")
+                self.logger.debug(f"Created node {i}: {node}")
 
             # Step 2: Connect nodes using head indices
             root = None
@@ -114,14 +109,12 @@ class DiaParserTreeParser(BaseTreeParser):
                                                          token_data['rels'])):
                 if head_idx == 0:  # Root node
                     root = node
-                    if self.verbose == 'debug':
-                        self.logger.debug(f"Found root node: {node}")
+                    self.logger.debug(f"Found root node: {node}")
                 else:
                     # Head indices are 1-based in CoNLL format
                     parent = nodes[head_idx - 1]
                     parent.add_child(node, rel)
-                    if self.verbose == 'debug':
-                        self.logger.debug(f"Connected node {node} to parent {parent}")
+                    self.logger.debug(f"Connected node {node} to parent {parent}")
 
             # Step 3: Verify we found a root and built valid tree
             if root is None:

@@ -1,0 +1,23 @@
+# TMN_DataGen/configs/default_package_config.yaml
+parsers:
+  diaparser:
+    capabilities:
+      - dependency_structure
+      - dependency_labels 
+    models:
+      - en_ewt.electra-base
+      - en_ewt.bert-base
+  
+  spacy:
+    capabilities:
+      - pos_tags
+      - lemmas 
+      - morph_features
+      - ner
+      - dependency_structure  # Available but not recommended
+      - dependency_labels    # Available but not recommended
+    models:
+      - en_core_web_sm
+      - en_core_web_md
+      - en_core_web_lg
+      - en_core_web_trf

@@ -22,37 +22,6 @@ class DependencyTree:
             if condition_fn(node):
                 modification_fn(node)
     
-    # def swap_nodes(self, node1: Node, node2: Node):
-    #     """Swap two nodes while preserving tree structure"""
-    #     # Save parent relationships
-    #     parent1 = node1.parent
-    #     parent2 = node2.parent
-    #     dep1 = node1.dependency_to_parent
-    #     dep2 = node2.dependency_to_parent
-    #     
-    #     # Swap in parents' children lists
-    #     if parent1:
-    #         parent1.replace_child(node1, node2, dep1)
-    #     if parent2:
-    #         parent2.replace_child(node2, node1, dep2)
-    #         
-    #     # Handle case where one is parent of the other
-    #     if node1 in [child for child, _ in node2.children]:
-    #         idx = [child for child, _ in node2.children].index(node1)
-    #         node2.children[idx] = (node1, node2.children[idx][1])
-    #     elif node2 in [child for child, _ in node1.children]:
-    #         idx = [child for child, _ in node1.children].index(node2)
-    #         node1.children[idx] = (node2, node1.children[idx][1])
-    #         
-    #     # Swap children lists
-    #     node1.children, node2.children = node2.children, node1.children
-    #     
-    #     # Update root if needed
-    #     if self.root == node1:
-    #         self.root = node2
-    #     elif self.root == node2:
-    #         self.root = node1
-
     def swap_nodes(self, node1: Node, node2: Node):
         """Swap two nodes while preserving tree structure"""
         # Save parent relationships

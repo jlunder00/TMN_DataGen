@@ -1,9 +1,0 @@
-# configs/preprocessing_stanza.yaml
-preprocessing:
-  strictness_level: 1
-  tokenizer: "stanza"
-  language: "en" 
-  preserve_case: true
-  remove_punctuation: false
-  normalize_unicode: false
-  remove_numbers: false

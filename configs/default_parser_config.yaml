@@ -1,0 +1,17 @@
+# TMN_DataGen/configs/default_parser_config.yaml
+parser:
+  type: multi
+  parsers:
+    diaparser:
+      enabled: true
+      model_name: en_ewt.electra-base
+    spacy:
+      enabled: true 
+      model_name: en_core_web_sm
+  feature_sources:
+    tree_structure: diaparser
+    pos_tags: spacy
+    morph: spacy
+    lemmas: spacy
+
+
