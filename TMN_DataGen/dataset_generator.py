@@ -8,6 +8,7 @@ from .parsers import DiaParserTreeParser, SpacyTreeParser, MultiParser
 from .tree import DependencyTree
 from .utils.viz_utils import format_tree_pair
 from .utils.logging_config import logger
+from importlib.resources import files
 
 class DatasetGenerator:
     def __init__(self):
@@ -27,7 +28,8 @@ class DatasetGenerator:
         override_pkg_config: Optional[Union[str, Dict]] = None
     ) -> Dict:
         """Load and merge configurations"""
-        config_dir = Path(__file__).parent / 'configs'
+        config_dir = Path(files('TMN_DataGen').joinpath('configs'))
+        # config_dir = Path(__file__).parent / 'configs'
         
         # Load default configs
         with open(config_dir / 'default_package_config.yaml') as f:
