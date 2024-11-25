@@ -88,6 +88,7 @@ class DatasetGenerator:
         output_path: str,
         parser_config: Optional[Union[str, Dict]] = None,
         preprocessing_config: Optional[Union[str, Dict]] = None,
+        feature_config: Optional[Union[str, Dict]] = None,
         verbosity: str = 'normal',
         override_pkg_config: Optional[Union[str, Dict]] = None,
         show_progress: bool = True
@@ -109,6 +110,7 @@ class DatasetGenerator:
         config, pkg_config = self._load_configs(
             parser_config,
             preprocessing_config,
+            feature_config,
             verbosity,
             override_pkg_config
         )
