@@ -1,6 +1,7 @@
 #dependency_tree.py
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
+import torch
 from omegaconf import DictConfig
 
 try:
@@ -12,10 +13,21 @@ class DependencyTree:
     def __init__(self, root: Node, config: Optional[DictConfig] = None):
         self.root = root
         self.config = config or {}
+        # Cache feature dimensions
+        self._feature_dims = None
         # Verify tree structure
         if not self.root.verify_tree_structure():
             raise ValueError("Invalid tree structure detected")
     
+    @property
+    def feature_dims(self) -> Dict[str, int]:
+        """Get or cache feature dimensions"""
+        if self._feature_dims is None:
+            from ..utils.feature_utils import FeatureExtractor
+            extractor = FeatureExtractor(self.config)
+            self._feature_dims = extractor.get_feature_dim()
+        return self._feature_dims
+
     def modify_subtree(self, condition_fn, modification_fn):
         """Apply modification to nodes that meet condition"""
         for node in self.root.traverse_preorder():
@@ -62,52 +74,50 @@ class DependencyTree:
         elif self.root == node2:
             self.root = node1
     
-    def to_graph_data(self) -> Dict[str, np.ndarray]:
+    def to_graph_data(self) -> Dict[str, Any]:
         """Convert to format needed for GMN"""
+        from ..utils.feature_utils import FeatureExtractor
+        extractor = FeatureExtractor(self.config)
         nodes = self.root.get_subtree_nodes()
         
+        # Get feature dimensions
+        dims = self.feature_dims
+        
+        # Pre-allocate tensors for efficiency
+        node_features = torch.zeros(len(nodes), dims['node'])
+        edge_indices = []  # Will convert to tensor after collecting all
+        edge_features = []  # Will stack after collecting all
+        
         # Create node features
-        node_features = []
-        for node in nodes:
-            node_feat = self._create_node_features(node)  
-            node_features.append(node_feat)
+        for i, node in enumerate(nodes):
+            try:
+                node_features[i] = extractor.create_node_features(node)
+            except Exception as e:
+                raise ValueError(f"Failed to create features for node {node}: {e}")
             
         # Create edge list and features
-        from_idx = []
-        to_idx = []
-        edge_features = []
-        
         for i, node in enumerate(nodes):
             for child, dep_type in node.children:
-                child_idx = nodes.index(child)
-                from_idx.append(i)
-                to_idx.append(child_idx)
-                edge_feat = self._create_edge_features(dep_type)
-                edge_features.append(edge_feat)
+                try:
+                    child_idx = nodes.index(child)
+                    edge_indices.append((i, child_idx))
+                    edge_features.append(extractor.create_edge_features(dep_type))
+                except Exception as e:
+                    raise ValueError(f"Failed to process edge {node}->{child}: {e}")
                 
+        # Convert to final format
+        edge_indices = torch.tensor(edge_indices).t() if edge_indices else torch.zeros((2, 0))
+        edge_features = torch.stack(edge_features) if edge_features else torch.zeros((0, dims['edge']))
+        
+        # Convert to lists for JSON serialization
         return {
-            'node_features': np.array(node_features).tolist(),
-            'edge_features': np.array(edge_features).tolist(),
-            'from_idx': np.array(from_idx).tolist(),
-            'to_idx': np.array(to_idx).tolist(),
-            'graph_idx': np.array([0] * len(nodes)).tolist(),  
-            'n_graphs': 1  
+            'node_features': node_features.numpy().tolist(),
+            'edge_features': edge_features.numpy().tolist(),
+            'from_idx': edge_indices[0].numpy().tolist(),
+            'to_idx': edge_indices[1].numpy().tolist(),
+            'graph_idx': [0] * len(nodes),
+            'n_graphs': 1
         }
-
-    def _create_node_features(self, node: Node) -> np.ndarray:
-        from ..utils.feature_utils import FeatureExtractor
-        extractor = FeatureExtractor(self.config)
-        features = extractor.create_node_features(
-            node, 
-            self.config.get('feature_extraction', {})
-        )
-        return features.numpy()
-    
-    def _create_edge_features(self, dependency_type: str) -> np.ndarray:
-        from ..utils.feature_utils import FeatureExtractor
-        extractor = FeatureExtractor(self.config)
-        features = extractor.create_edge_features(dependency_type)
-        return features.numpy()
     
     def to_dict(self) -> Dict:
         """Convert tree to dictionary representation"""
@@ -133,5 +143,3 @@ class DependencyTree:
         
         root = dict_to_node(data['root'])
         return cls(root)
-
-
