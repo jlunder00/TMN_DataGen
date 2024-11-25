@@ -110,9 +110,15 @@ class BatchProcessor:
         self.merge_batches()
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(prog="run.py")
+    
+    parser.add_argument("-if", "--input_file", type=str, help="input data path")
+    parser.add_argument("-od", "--out_dir", type=str, help="output data dir")
+    args = parser.parse_args()
     processor = BatchProcessor(
-        input_file='../data/snli_1.0_train.jsonl',
-        output_dir='../data/processed_data',
+        input_file=args.input_file,
+        output_dir=args.out_dir,
         batch_size=100,
         checkpoint_every=1000
     )
