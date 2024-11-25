@@ -42,7 +42,7 @@ def sample_data():
             ('The cat chases the mouse.', 'The mouse is being chased by the cat.'),
             ('The dog barks.', 'The cat meows.')
         ],
-        'labels': ['entails', 'neutral']
+        'labels': ['entailment', 'neutral']
     }
 
 @pytest.fixture
@@ -52,5 +52,5 @@ def unicode_data():
             ('The café is nice!', 'It is a coffee shop.'),
             ('こんにちは世界', 'Hello world')  
         ],
-        'labels': ['entails', 'neutral']
+        'labels': ['entailment', 'neutral']
     }

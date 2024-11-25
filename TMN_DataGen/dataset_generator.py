@@ -154,17 +154,34 @@ class DatasetGenerator:
             self.logger.info(f"\nDataset saved to {output_path}")
 
     def _convert_to_gmn_format(self, 
-                              tree_pairs: List[Tuple[DependencyTree, DependencyTree]],
+                              tree_pairs: List[Tuple[DependencyTree, DependencyTree]], 
                               labels: List[str]) -> Dict:
         """Convert tree pairs to GMN-compatible format"""
         graph_pairs = []
         numeric_labels = []
         
+        skipped_count = 0
         for (tree1, tree2), label in zip(tree_pairs, labels):
+            # Skip pairs with no majority label
+            if label == '-':
+                skipped_count += 1
+                continue
+                
+            # Handle valid labels
+            if label not in self.label_map:
+                self.logger.error(f"Invalid label '{label}' encountered. Expected one of: {list(self.label_map.keys())}")
+                raise ValueError(f"Invalid label: {label}")
+                
             graph1 = tree1.to_graph_data()
             graph2 = tree2.to_graph_data()
             graph_pairs.append((graph1, graph2))
             numeric_labels.append(self.label_map[label])
+        
+        if skipped_count > 0:
+            skip_percent = (skipped_count / len(labels)) * 100
+            self.logger.info(f"Skipped {skipped_count} pairs ({skip_percent:.1f}%) due to annotator disagreement")
+            if skip_percent > 5:  # Arbitrary threshold
+                self.logger.warning(f"High skip rate ({skip_percent:.1f}%) may indicate data quality issues")
         
         return {
             'graph_pairs': graph_pairs,

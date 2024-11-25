@@ -10,7 +10,7 @@ with open(os.path.dirname(__file__) + "/requirements.txt", "r") as R:
 
 setup(
     name="TMN_DataGen",
-    version='0.6.2',
+    version='0.6.4',
     description="Tree Matching Network Data Generator",
     author="toast",
     packages=find_packages(),

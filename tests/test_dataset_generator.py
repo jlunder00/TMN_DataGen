@@ -80,7 +80,7 @@ def test_dataset_content(sample_data, default_config, tmp_path):
     assert len(graph1['graph_idx']) == n_nodes
     
     # Check label encoding
-    label_map = {'entails': 1, 'contradicts': -1, 'neutral': 0}
+    label_map = {'entailment': 1, 'contradiction': -1, 'neutral': 0}
     for label, encoded in zip(sample_data['labels'], data['labels']):
         assert encoded == label_map[label]
 

@@ -11,11 +11,13 @@ class BatchProcessor:
                  input_file: str,
                  output_dir: str,
                  batch_size: int = 1000,
-                 checkpoint_every: int = 5000):
+                 checkpoint_every: int = 5000,
+                 verbosity: str = 'quiet'):
         self.input_file = input_file
         self.output_dir = Path(output_dir)
         self.batch_size = batch_size
         self.checkpoint_every = checkpoint_every
+        self.verbosity = verbosity
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Load dataset generator
@@ -65,7 +67,8 @@ class BatchProcessor:
         self.generator.generate_dataset(
             sentence_pairs=sentence_pairs,
             labels=labels,
-            output_path=str(output_path)
+            output_path=str(output_path),
+            verbosity=self.verbosity
         )
         
         # Update progress
@@ -115,11 +118,13 @@ if __name__ == '__main__':
     
     parser.add_argument("-if", "--input_file", type=str, help="input data path")
     parser.add_argument("-od", "--out_dir", type=str, help="output data dir")
+    parser.add_argument("-v", "--verbosity", type=str, default='quiet', help="verbose level: 'quiet', 'normal', or 'debug'")
     args = parser.parse_args()
     processor = BatchProcessor(
         input_file=args.input_file,
         output_dir=args.out_dir,
-        batch_size=100,
-        checkpoint_every=1000
+        batch_size=1000,
+        checkpoint_every=3000,
+        verbosity=args.verbosity
     )
     processor.process_all()
