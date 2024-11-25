@@ -102,6 +102,54 @@ def test_multi_parser(base_config):
         assert node.pos_tag != ""
         assert 'morph_features' in node.features
 
+def test_parser_preprocessing(base_config):
+    """Test preprocessing integration with parser"""
+    config = OmegaConf.merge(base_config, {
+        'parser': {
+            'type': 'diaparser',
+            'language': 'en'
+        },
+        'preprocessing': {
+            'strictness_level': 2,
+            'tokenizer': 'regex',
+            'remove_punctuation': True
+        }
+    })
+    
+    parser = DiaParserTreeParser(config)
+    
+    # Test preprocessing pipeline
+    sentence = "The quick,  brown   fox!"
+    tokens = parser.preprocess_and_tokenize(sentence)
+    assert tokens == ['The', 'quick', 'brown', 'fox']
+
+    # Test full parsing with preprocessing
+    tree = parser.parse_single(sentence)
+    nodes = tree.root.get_subtree_nodes()
+    words = [node.word for node in nodes]
+    assert words == tokens
+
+def test_parser_with_unicode(base_config):
+    """Test parser handling of unicode text"""
+    config = OmegaConf.merge(base_config, {
+        'parser': {
+            'type': 'diaparser',
+            'language': 'en'
+        },
+        'preprocessing': {
+            'strictness_level': 3,
+            'normalize_unicode': True
+        }
+    })
+    
+    parser = DiaParserTreeParser(config)
+    
+    sentence = "The café is nice."
+    tree = parser.parse_single(sentence)
+    nodes = tree.root.get_subtree_nodes()
+    words = [node.word for node in nodes]
+    assert 'cafe' in words  # accent removed
+
 class TestMultiParser:
     @pytest.fixture
     def multi_parser_config(self, base_config):

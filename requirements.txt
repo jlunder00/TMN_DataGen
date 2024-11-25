@@ -16,3 +16,6 @@ transformers>=4.30.0
 tqdm>=4.65.0
 pytest>=7.0.0
 pytest-cov>=4.0.0
+regex>=2022.1.18
+unicodedata2>=15.0.0
+stanza>=1.4.0; python_version >= "3.6"  # Optional
