@@ -9,18 +9,29 @@ def default_config():
     """Load all default configs for testing"""
     config_dir = Path(__file__).parent.parent / 'TMN_DataGen' / 'configs'
     
-    # Load package config
+    # Load configs
     with open(config_dir / 'default_package_config.yaml') as f:
         pkg_config = yaml.safe_load(f)
         
-    # Load and merge parser and preprocessing configs
     with open(config_dir / 'default_parser_config.yaml') as f:
         config = yaml.safe_load(f)
         
     with open(config_dir / 'default_preprocessing_config.yaml') as f:
         preproc = yaml.safe_load(f)
-        config.update(preproc)
         
+    with open(config_dir / 'default_feature_config.yaml') as f:
+        feature_config = yaml.safe_load(f)
+
+    # Merge configs
+    config.update(preproc)
+    config.update(feature_config)
+    
+    # # Override some settings for testing
+    # config['feature_extraction'].update({
+    #     'use_gpu': False,
+    #     'cache_embeddings': False  
+    # })
+    
     return OmegaConf.create(config), pkg_config
 
 @pytest.fixture

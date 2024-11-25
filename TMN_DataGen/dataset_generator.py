@@ -23,7 +23,8 @@ class DatasetGenerator:
     def _load_configs(
         self,
         parser_config: Optional[Union[str, Dict]] = None,
-        preprocessing_config: Optional[Union[str, Dict]] = None, 
+        preprocessing_config: Optional[Union[str, Dict]] = None,
+        feature_config: Optional[Union[str, Dict]] = None,
         verbosity: str = 'normal',
         override_pkg_config: Optional[Union[str, Dict]] = None
     ) -> Dict:
@@ -39,6 +40,9 @@ class DatasetGenerator:
             config = yaml.safe_load(f)
             
         with open(config_dir / 'default_preprocessing_config.yaml') as f:
+            config.update(yaml.safe_load(f))
+
+        with open(config_dir / 'default_feature_config.yaml') as f:
             config.update(yaml.safe_load(f))
             
         # Add verbosity
@@ -65,6 +69,15 @@ class DatasetGenerator:
                 with open(preprocessing_config) as f:
                     preprocessing_config = yaml.safe_load(f)
             config['preprocessing'].update(preprocessing_config)
+
+        # Override feature config if provided
+        if feature_config:
+            if isinstance(feature_config, str):
+                with open(feature_config) as f:
+                    feature_config = yaml.safe_load(f)
+            for key in ['feature_extraction', 'feature_mappings']:
+                if key in feature_config:
+                    config[key].update(feature_config[key])
 
         return OmegaConf.create(config), pkg_config
 

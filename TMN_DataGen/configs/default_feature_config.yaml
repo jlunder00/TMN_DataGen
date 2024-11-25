@@ -1,0 +1,61 @@
+# TMN_DataGen/TMN_DataGen/configs/default_feature_config.yaml
+feature_extraction:
+  word_embedding_model: bert-base-uncased
+  use_gpu: true  
+  cache_embeddings: true
+  embedding_cache_dir: embedding_cache 
+  batch_size: 32
+
+feature_mappings:
+  pos_tags:
+    - ADJ
+    - ADP 
+    - ADV
+    - AUX
+    - CCONJ
+    - DET
+    - INTJ
+    - NOUN
+    - NUM
+    - PART
+    - PRON
+    - PROPN
+    - PUNCT
+    - SCONJ
+    - SYM
+    - VERB
+    - X
+
+  dep_types:
+    - nsubj
+    - obj 
+    - iobj
+    - det
+    - nmod
+    - amod
+    - advmod
+    - nummod
+    - appos
+    - conj
+    - cc
+    - punct
+    - root
+    - aux
+    - cop
+    - case
+    - mark
+    - compound
+    - acl
+    - fixed
+    - flat
+
+  morph_features:
+    - Number
+    - Person 
+    - Tense
+    - VerbForm
+    - Case
+    - Gender
+    - Mood
+    - Voice
+    - Aspect

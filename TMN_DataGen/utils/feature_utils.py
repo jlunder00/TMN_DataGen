@@ -26,7 +26,15 @@ class FeatureExtractor:
                 self.config.get('verbose', 'normal')
             )
             
-            # Load model configurations
+            # 1. Initialize feature mappings first
+            self.feature_mappings = self._initialize_feature_mappings()
+            
+            # 2. Then calculate dimensions
+            self.morph_dim = self._calculate_morph_dim()
+            self.pos_dim = len(self.feature_mappings['pos_tags']) + 1
+            self.dep_dim = len(self.feature_mappings['dep_types']) + 1
+            
+            # 3. Load model/tokenizer after mappings are ready
             model_cfg = self.config.get('feature_extraction', {})
             self.model_name = model_cfg.get('word_embedding_model', 'bert-base-uncased')
             self.use_gpu = model_cfg.get('use_gpu', True) and torch.cuda.is_available()
@@ -45,20 +53,12 @@ class FeatureExtractor:
                 self.model = AutoModel.from_pretrained(self.model_name)
                 if self.use_gpu:
                     self.model = self.model.to(self.device)
-                self.model.eval()  # Set to evaluation mode
+                self.model.eval()
+                self.embedding_dim = self.model.config.hidden_size
             except Exception as e:
                 self.logger.error(f"Failed to load model: {e}")
                 raise
 
-            # Feature dimensions 
-            self.embedding_dim = self.model.config.hidden_size
-            self.pos_dim = len(self._default_pos_tags()) + 1
-            self.dep_dim = len(self._default_dep_types()) + 1
-            self.morph_dim = self._calculate_morph_dim()
-            
-            # Initialize feature mappings
-            self.feature_mappings = self._initialize_feature_mappings()
-            
             self.logger.info(f"Feature dimensions - Embedding: {self.embedding_dim}, "
                            f"POS: {self.pos_dim}, Dep: {self.dep_dim}, "
                            f"Morph: {self.morph_dim}")
