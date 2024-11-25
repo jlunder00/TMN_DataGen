@@ -14,8 +14,8 @@ class DatasetGenerator:
     def __init__(self):
         """Initialize dataset generator without config - config provided per method call"""
         self.label_map = {
-            'entails': 1,
-            'contradicts': -1,
+            'entailment': 1,
+            'contradiction': -1,
             'neutral': 0
         }
 
