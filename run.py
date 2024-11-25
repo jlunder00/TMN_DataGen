@@ -12,12 +12,18 @@ class BatchProcessor:
                  output_dir: str,
                  batch_size: int = 1000,
                  checkpoint_every: int = 5000,
-                 verbosity: str = 'quiet'):
+                 verbosity: str = 'quiet',
+                 parser_config: Optional[Dict] = None,
+                 preprocessing_config: Optional[Dict] = None,
+                 feature_config: Optional[Dict] = None):
         self.input_file = input_file
         self.output_dir = Path(output_dir)
         self.batch_size = batch_size
         self.checkpoint_every = checkpoint_every
         self.verbosity = verbosity
+        self.parser_config = parser_config
+        self.preprocessing_config = preprocessing_config
+        self.feature_config = feature_config
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Load dataset generator
@@ -68,7 +74,10 @@ class BatchProcessor:
             sentence_pairs=sentence_pairs,
             labels=labels,
             output_path=str(output_path),
-            verbosity=self.verbosity
+            verbosity=self.verbosity,
+            parser_config=self.parser_config,
+            preprocessing_config=self.preprocessing_config,
+            feature_config=self.feature_config
         )
         
         # Update progress
@@ -118,8 +127,27 @@ if __name__ == '__main__':
     
     parser.add_argument("-if", "--input_file", type=str, help="input data path")
     parser.add_argument("-od", "--out_dir", type=str, help="output data dir")
+    parser.add_argument("-v", "--verbosity", type=str, default='quiet', help="verbose level: 'quiet', 'normal', or 'debug'")
+    args = parser.parse_args()
+    processor = BatchProcessor(
+        input_file=args.input_file,
+        output_dir=args.out_dir,
+        batch_size=1000,
+        checkpoint_every=3000,
+        verbosity=args.verbosity
+    )
+    processor.process_all()
+
+# In run.py main section
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(prog="run.py")
+    
+    parser.add_argument("-if", "--input_file", type=str, help="input data path")
+    parser.add_argument("-od", "--out_dir", type=str, help="output data dir")
     parser.add_argument("--spacy_model", type=str, default="en_core_web_sm",
                        help="spacy model to use")
+    parser.add_argument("-v", "--verbosity", type=str, default='quiet', help="verbose level: 'quiet', 'normal', or 'debug'")
     args = parser.parse_args()
 
     parser_config = {
@@ -143,6 +171,7 @@ if __name__ == '__main__':
         output_dir=args.out_dir,
         batch_size=100,
         checkpoint_every=1000,
+        verbosity=args.verbosity,
         parser_config=parser_config
     )
     processor.process_all()
