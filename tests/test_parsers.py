@@ -19,9 +19,22 @@ def test_diaparser_detailed(base_config):
     config = OmegaConf.merge(base_config, {
         'parser': {
             'type': 'diaparser',
+            'language': 'en',
             'verbose': 'debug'
+        },
+        'preprocessing': {
+            'strictness_level': 2,
+            'tokenizer': 'regex',
+            'remove_punctuation': True,
+            'language': 'en',
+            'preserve_case': False,
+            'normalize_unicode': True,
+            'remove_numbers': False,
+            'max_token_length': 50,
+            'min_token_length': 1
         }
     })
+
     parser = DiaParserTreeParser(config)
     
     # Test simple sentence
@@ -35,7 +48,8 @@ def test_diaparser_detailed(base_config):
     # Verify basic structure
     assert len(nodes) == 5  # should have 5 words
     assert tree.root.word == "chases"  # main verb should be root
-    assert tree.root.pos_tag == "VERB"
+
+    # assert tree.root.pos_tag == "VERB" # Diaparser does not give pos tags or lemmas
     
     # Find subject and object
     subj = [n for n, t in tree.root.children if t == "nsubj"][0]
@@ -112,7 +126,13 @@ def test_parser_preprocessing(base_config):
         'preprocessing': {
             'strictness_level': 2,
             'tokenizer': 'regex',
-            'remove_punctuation': True
+            'remove_punctuation': True,
+            'language': 'en',
+            'preserve_case': False,
+            'normalize_unicode': True,
+            'remove_numbers': False,
+            'max_token_length': 50,
+            'min_token_length': 1
         }
     })
     

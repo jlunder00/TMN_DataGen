@@ -10,10 +10,18 @@ with open(os.path.dirname(__file__) + "/requirements.txt", "r") as R:
 
 setup(
     name="TMN_DataGen",
-    version='0.4.0',
+    version='0.4.2',
     description="Tree Matching Network Data Generator",
     author="toast",
     packages=find_packages(),
     install_requires=requirements,
+    extras_require={
+        'stanza': ['stanza>=1.4.0'],
+        'all': [
+            'stanza>=1.2.3',
+            'regex>=2022.1.18',
+            'unicodedata2>=15.0.0'
+        ]
+    },
     zip_safe=False,
 )

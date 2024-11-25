@@ -39,9 +39,9 @@ class DiaParserTreeParser(BaseTreeParser):
             """Convert various input formats to list"""
             if isinstance(val, str):
                 return val.split()
-            elif isinstance(val, tuple):
-                # DiaParser sometimes returns tuples
-                return ensure_list(val[0])
+            # elif isinstance(val, tuple):
+            #     # DiaParser sometimes returns tuples
+            #     return ensure_list(val[0])
             return list(val)
 
         try:
@@ -79,11 +79,15 @@ class DiaParserTreeParser(BaseTreeParser):
             self.logger.debug(f"Parsing batch of {len(sentences)} sentences")
         
         for sentence in sentences:
+            
+            # Preprocess and tokenize first
+            tokens = self.preprocess_and_tokenize(sentence)
+
             if self.verbose == 'debug':
                 self.logger.debug(f"\nParsing sentence: {sentence}")
             
             # Get DiaParser output
-            dataset = self.model.predict([sentence])
+            dataset = self.model.predict([tokens])
             token_data = self._process_prediction(dataset)
             
             # Step 1: Create all nodes
@@ -141,7 +145,7 @@ class DiaParserTreeParser(BaseTreeParser):
 
             if self.verbose in ('normal', 'debug'):
                 from ..utils.viz_utils import print_tree_text
-                self.logger.info("\nParsed tree structure:")
+                self.logger.info("\nDiapaarser parsed tree structure:")
                 self.logger.info(print_tree_text(tree, self.config))
 
             trees.append(tree)
