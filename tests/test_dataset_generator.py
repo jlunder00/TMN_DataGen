@@ -33,17 +33,13 @@ def test_config_override(sample_data, default_config, tmp_path):
     })
     
     generator = DatasetGenerator()
-    output_path = tmp_path / "test_dataset.pkl"
+    output_path = tmp_path / "test_dataset.json"
     
     generator.generate_dataset(
         sentence_pairs=sample_data['sentence_pairs'],
         labels=sample_data['labels'], 
         output_path=str(output_path),
-        parser_config={'parser': config['parser']},
-        feature_config= {
-            'feature_extraction':config['feature_extraction'],
-            'feature_mapping':config['feature_mapping']
-        },
+        parser_config=config,
         verbosity='debug'
     )
 
