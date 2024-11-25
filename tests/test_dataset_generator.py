@@ -1,7 +1,7 @@
 # tests/test_dataset_generator.py
 import pytest
 from TMN_DataGen import DatasetGenerator
-import pickle
+import json
 
 def test_dataset_generation(sample_data, default_config, tmp_path):
     """Test basic dataset generation workflow"""
