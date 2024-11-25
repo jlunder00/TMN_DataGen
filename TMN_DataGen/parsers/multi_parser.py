@@ -10,12 +10,12 @@ import yaml
 from pathlib import Path
 
 class MultiParser(BaseTreeParser):
-    def __init__(self, config=None, pkg_config=None):
+    def __init__(self, config=None, pkg_config=None, logger=None):
         # Load package capabilities config
         self.capabilities = pkg_config['parsers'] if pkg_config else {}
 
         # Initialize base class
-        super().__init__(config)
+        super().__init__(config, pkg_config, logger)
 
         # Validate user's feature source config against capabilities
         self._validate_feature_sources()

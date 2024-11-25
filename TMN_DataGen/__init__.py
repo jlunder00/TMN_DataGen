@@ -1,15 +1,4 @@
 # TMN_DataGen/TMN_DataGen/__init__.py
-import logging
-
-# Set up logging configuration
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(message)s',  # Simple format to just show messages for tree visualization
-    force=True  # Ensure our config takes precedence
-)
-
-logger = logging.getLogger(__name__)
-
 from .tree.node import Node
 from .tree.dependency_tree import DependencyTree
 from .parsers.diaparser_impl import DiaParserTreeParser

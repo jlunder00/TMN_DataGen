@@ -38,5 +38,3 @@ def setup_logger(name: str, verbosity: str = 'normal') -> logging.Logger:
     
     return logger
 
-# Create package logger
-logger = setup_logger("TMN_DataGen")

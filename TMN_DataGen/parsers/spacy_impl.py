@@ -7,8 +7,8 @@ from typing import List, Any, Optional
 from omegaconf import DictConfig
 
 class SpacyTreeParser(BaseTreeParser):
-    def __init__(self, config: Optional[DictConfig] = None):
-        super().__init__(config)
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config = None, logger = None):
+        super().__init__(config, pkg_config, logger)
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_core_web_sm')
             self.model = spacy.load(model_name)

@@ -13,22 +13,22 @@ from tqdm import tqdm
 class BaseTreeParser(ABC):
     _instances: Dict[str, 'BaseTreeParser'] = {}
     
-    def __new__(cls, config=None, pkg_config=None):
+    def __new__(cls, config=None, pkg_config=None, logger=None):
         if cls not in cls._instances:
             cls._instances[cls.__name__] = super(BaseTreeParser, cls).__new__(cls)
         return cls._instances[cls.__name__]
     
     @abstractmethod
-    def __init__(self, config: Optional[DictConfig] = None):
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, logger=None):
         if not hasattr(self, 'initialized'):
             self.config = config or {}
             self.batch_size = self.config.get('batch_size', 32)
             
             # Set up logger
-            self.logger = setup_logger(
-                self.__class__.__name__,
-                self.config.get('verbose', 'normal')
-            )
+            self.logger = logger or setup_logger(
+                    self.__class__.__name__,
+                    self.config.get('verbose', 'normal')
+                    )
 
             # Initialize preprocessor
             self.preprocessor = BasePreprocessor(self.config)

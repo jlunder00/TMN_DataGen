@@ -2,15 +2,14 @@
 from .base_parser import BaseTreeParser
 from ..tree.node import Node
 from ..tree.dependency_tree import DependencyTree
-from ..utils.logging_config import logger
 from diaparser.parsers import Parser
 from typing import List, Dict, Any, Optional, Tuple
 from omegaconf import DictConfig
 import numpy as np
 
 class DiaParserTreeParser(BaseTreeParser):
-    def __init__(self, config: Optional[DictConfig] = None):
-        super().__init__(config)
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, logger=None):
+        super().__init__(config, pkg_config, logger)
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_ewt.electra-base')
             self.model = Parser.load(model_name)

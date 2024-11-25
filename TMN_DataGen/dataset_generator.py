@@ -7,7 +7,7 @@ from omegaconf import OmegaConf
 from .parsers import DiaParserTreeParser, SpacyTreeParser, MultiParser
 from .tree import DependencyTree
 from .utils.viz_utils import format_tree_pair
-from .utils.logging_config import logger
+from .utils.logging_config import setup_logger
 from importlib.resources import files
 
 class DatasetGenerator:
@@ -105,16 +105,16 @@ class DatasetGenerator:
                 )
 
         # Initialize parser
-        parser = MultiParser(config, pkg_config)
+        parser = MultiParser(config, pkg_config, self.logger)
 
         # Process sentence pairs
         if verbosity != 'quiet':
-            logger.info("\nGenerating dataset...")
-            logger.info(f"Processing {len(sentence_pairs)} sentence pairs")
+            self.logger.info("\nGenerating dataset...")
+            self.logger.info(f"Processing {len(sentence_pairs)} sentence pairs")
 
         all_sentences = [s for pair in sentence_pairs for s in pair]
         
-        logger.info("Parsing sentences...")
+        self.logger.info("Parsing sentences...")
         all_trees = parser.parse_all(all_sentences, show_progress)
         
         # Pair up trees
@@ -124,11 +124,11 @@ class DatasetGenerator:
         ]
 
         if verbosity == 'debug':
-            logger.info("\nGenerated tree pairs:")
+            self.logger.info("\nGenerated tree pairs:")
             for (tree1, tree2), label in zip(tree_pairs, labels):
-                logger.info("\n" + "=" * 80)
-                logger.info(format_tree_pair(tree1, tree2, label))
-                logger.info("=" * 80)
+                self.logger.info("\n" + "=" * 80)
+                self.logger.info(format_tree_pair(tree1, tree2, label))
+                self.logger.info("=" * 80)
 
         # Convert and save
         dataset = self._convert_to_gmn_format(tree_pairs, labels)
@@ -136,7 +136,7 @@ class DatasetGenerator:
             pickle.dump(dataset, f)
 
         if verbosity != 'quiet':
-            logger.info(f"\nDataset saved to {output_path}")
+            self.logger.info(f"\nDataset saved to {output_path}")
 
     def _convert_to_gmn_format(self, 
                               tree_pairs: List[Tuple[DependencyTree, DependencyTree]],
