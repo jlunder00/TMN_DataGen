@@ -86,12 +86,14 @@ class DependencyTree:
                 edge_features.append(edge_feat)
                 
         return {
-            'node_features': np.array(node_features),
-            'edge_features': np.array(edge_features),
-            'from_idx': np.array(from_idx),
-            'to_idx': np.array(to_idx)
+            'node_features': np.array(node_features).tolist(),
+            'edge_features': np.array(edge_features).tolist(),
+            'from_idx': np.array(from_idx).tolist(),
+            'to_idx': np.array(to_idx),
+            'graph_idx': np.array([0] * len(nodes)).tolist(),  
+            'n_graphs': 1  
         }
-    
+
     def _create_node_features(self, node: Node) -> np.ndarray:
         from ..utils.feature_utils import FeatureExtractor
         extractor = FeatureExtractor(self.config)

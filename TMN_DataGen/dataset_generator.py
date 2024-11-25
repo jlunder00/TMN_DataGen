@@ -2,7 +2,7 @@
 from typing import List, Tuple, Optional, Dict, Union
 from pathlib import Path
 import yaml
-import pickle
+import json
 from omegaconf import OmegaConf
 from .parsers import DiaParserTreeParser, SpacyTreeParser, MultiParser
 from .tree import DependencyTree
@@ -132,8 +132,8 @@ class DatasetGenerator:
 
         # Convert and save
         dataset = self._convert_to_gmn_format(tree_pairs, labels)
-        with open(output_path, 'wb') as f:
-            pickle.dump(dataset, f)
+        with open(output_path, 'w') as f:
+            json.dump(dataset, f, indent=4)
 
         if verbosity != 'quiet':
             self.logger.info(f"\nDataset saved to {output_path}")

@@ -22,7 +22,7 @@ class BaseTreeParser(ABC):
     def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, logger=None):
         if not hasattr(self, 'initialized'):
             self.config = config or {}
-            self.verbose = self.config.get('verbose', 'normal')
+            self.verbose = self.config.get('verbose', 'normal') 
             self.batch_size = self.config.get('batch_size', 32)
             
             # Set up logger
@@ -31,7 +31,6 @@ class BaseTreeParser(ABC):
                     self.config.get('verbose', 'normal')
                     )
 
-            # Initialize preprocessor
             self.preprocessor = BasePreprocessor(self.config)
 
             # Initialize Tokenizer
