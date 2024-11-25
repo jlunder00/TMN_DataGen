@@ -135,7 +135,7 @@ class DiaParserTreeParser(BaseTreeParser):
                     f"Invalid tree structure detected for sentence: {sentence}"
                 )
 
-            if self.verbose in ('normal', 'debug'):
+            if self.verbose == 'debug':
                 from ..utils.viz_utils import print_tree_text
                 self.logger.info("\nDiapaarser parsed tree structure:")
                 self.logger.info(print_tree_text(tree, self.config))
