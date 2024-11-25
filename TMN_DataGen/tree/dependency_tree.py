@@ -89,7 +89,7 @@ class DependencyTree:
             'node_features': np.array(node_features).tolist(),
             'edge_features': np.array(edge_features).tolist(),
             'from_idx': np.array(from_idx).tolist(),
-            'to_idx': np.array(to_idx),
+            'to_idx': np.array(to_idx).tolist(),
             'graph_idx': np.array([0] * len(nodes)).tolist(),  
             'n_graphs': 1  
         }
