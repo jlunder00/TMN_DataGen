@@ -50,7 +50,7 @@ class MultiParser(BaseTreeParser):
         combined_trees = []
         for i in range(len(processed_sentences)):
             # Start with the base tree structure from preferred parser
-            base_parser = self.feature_sources['tree_structure']
+            base_parser = self.config.parser.feature_sources['tree_structure']
             if base_parser not in parser_results:
                 raise ValueError(f"Base parser {base_parser} not available")
             
@@ -74,9 +74,9 @@ class MultiParser(BaseTreeParser):
     def _validate_feature_sources(self):
         """Validate that assigned feature sources are capable"""
         for feature, parser in self.config.parser.feature_sources.items():
-            if parser not in self.capabilities['parsers']:
+            if parser not in self.capabilities:
                 raise ValueError(f"Unknown parser: {parser}")
-            if feature not in self.capabilities['parsers'][parser]['capabilities']:
+            if feature not in self.capabilities[parser]['capabilities']:
                 raise ValueError(
                     f"Parser {parser} cannot provide feature {feature}"
                 )
@@ -90,7 +90,7 @@ class MultiParser(BaseTreeParser):
                 continue
 
             # Skip if parser isn't capable of this feature
-            if feature not in self.capabilities['parsers'][parser_name]['capabilities']:
+            if feature not in self.capabilities[parser_name]['capabilities']:
                 continue
                 
             other_tree = parser_trees[parser_name]

@@ -33,8 +33,10 @@ class BasePreprocessor:
     def _basic_cleanup(self, text: str) -> str:
         """Basic normalization"""
         # Normalize whitespace
-        text = re.sub(r'\s+', ' ', text)
-        text = text.strip()
+        # text = re.sub(r'\s+', ' ', text)
+        # text = text.strip()
+    
+        text = ' '.join(text.split())
         
         if self.config.preprocessing.remove_punctuation:
             text = re.sub(r'[^\w\s]', ' ', text)
@@ -42,6 +44,7 @@ class BasePreprocessor:
         if not self.config.preprocessing.preserve_case:
             text = text.lower()
             
+        text = ' '.join(text.split())
         return text
         
     def _medium_cleanup(self, text: str) -> str:

@@ -33,8 +33,8 @@ class SpacyTreeParser(BaseTreeParser):
             for sent, tree in zip(processed_sentences, trees):
                 self.logger.debug(f"\nSpacy processed sentence: {sent}")
                 self.logger.debug(f"Generated Spacy tree with {len(tree.root.get_subtree_nodes())} nodes")
+        return trees
 
-    
     def parse_single(self, sentence: str) -> DependencyTree:
         self.logger.info("Begin Spacy single processing")
         # Preprocess
