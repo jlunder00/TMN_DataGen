@@ -1,6 +1,6 @@
 #parsers/__init__.py
 
-from ..utils.logging_config import logger
+from ..utils.logging_config import setup_logger
 from .base_parser import BaseTreeParser
 from .diaparser_impl import DiaParserTreeParser
 from .spacy_impl import SpacyTreeParser
