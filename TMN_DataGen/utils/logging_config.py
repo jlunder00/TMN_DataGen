@@ -1,5 +1,4 @@
 # TMN_DataGen/TMN_DataGen/utils/logging_config.py
-# TMN_DataGen/TMN_DataGen/utils/logging_config.py
 import logging
 import sys
 from typing import Optional

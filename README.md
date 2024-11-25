@@ -30,7 +30,7 @@ python -m spacy download en_core_web_sm
 ### DiaParser Models
 The default electra-base model will be downloaded automatically, but other options are available.
 
-## Configuration
+### Model Configuration
 
 Models can be specified in your configuration file:
 ```yaml
@@ -45,3 +45,72 @@ parser:
       enabled: true
       model_name: "en_core_web_trf"  # or any installed SpaCy model
 ```
+
+
+## Text Preprocessing and Tokenization
+
+TMN_DataGen provides configurable text preprocessing and tokenization options:
+
+### Preprocessing Levels
+
+The preprocessing pipeline has 4 levels of strictness:
+
+- **Level 0 (None)**: No preprocessing
+- **Level 1 (Basic)**: Whitespace normalization and punctuation handling
+- **Level 2 (Medium)**: Unicode normalization and non-ASCII removal
+- **Level 3 (Strict)**: Case normalization and accent removal
+
+### Tokenization Options
+
+Two tokenization approaches are available:
+
+1. **Regex Tokenizer**: Simple rule-based tokenization using word boundaries
+2. **Stanza Tokenizer**: Neural tokenizer with better handling of complex cases
+
+### Configuration
+
+Example configuration in yaml:
+
+```yaml
+preprocessing:
+  strictness_level: 2  # 0-3
+  tokenizer: "regex"   # "regex" or "stanza"
+  language: "en"
+  preserve_case: false
+  remove_punctuation: true
+  normalize_unicode: true
+  remove_numbers: false
+  max_token_length: 50
+  min_token_length: 1
+```
+
+### Example Usage
+
+```python
+from TMN_DataGen import DiaParserTreeParser
+from omegaconf import OmegaConf
+
+# Load config with strict preprocessing
+config = OmegaConf.load('configs/preprocessing_strict.yaml')
+parser = DiaParserTreeParser(config)
+
+# Parse with preprocessing
+sentence = "The café is nice!"
+tree = parser.parse_single(sentence)
+# Result: Normalized and tokenized sentence processed into dependency tree
+```
+
+for languages that require specialized tokenization, the Stanza tokenizer is recommended:
+```yaml
+preprocessing:
+  strictness_level: 1
+  tokenizer: "stanza"
+  language: "en"
+```
+
+Note: Stanza tokenizer requires additional dependencies. Install with:;
+```bash
+pip install TMN_DataGen[stanza]
+```
+
+

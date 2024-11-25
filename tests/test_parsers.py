@@ -14,6 +14,56 @@ def base_config():
         }
     })
 
+def test_diaparser_detailed(base_config):
+    """Detailed test of DiaParser tree construction"""
+    config = OmegaConf.merge(base_config, {
+        'parser': {
+            'type': 'diaparser',
+            'language': 'en',
+            'verbose': 'debug'
+        },
+        'preprocessing': {
+            'strictness_level': 2,
+            'tokenizer': 'regex',
+            'remove_punctuation': True,
+            'language': 'en',
+            'preserve_case': False,
+            'normalize_unicode': True,
+            'remove_numbers': False,
+            'max_token_length': 50,
+            'min_token_length': 1
+        }
+    })
+
+    parser = DiaParserTreeParser(config)
+    
+    # Test simple sentence
+    sentence = "The cat chases the mouse."
+    trees = parser.parse_all([sentence])
+    assert len(trees) == 1
+    
+    tree = trees[0]
+    nodes = tree.root.get_subtree_nodes()
+    
+    # Verify basic structure
+    assert len(nodes) == 5  # should have 5 words
+    assert tree.root.word == "chases"  # main verb should be root
+
+    # assert tree.root.pos_tag == "VERB" # Diaparser does not give pos tags or lemmas
+    
+    # Find subject and object
+    subj = [n for n, t in tree.root.children if t == "nsubj"][0]
+    obj = [n for n, t in tree.root.children if t == "obj"][0]
+    
+    assert subj.word == "cat"
+    assert obj.word == "mouse"
+    
+    # Check determiners
+    assert len(subj.children) == 1
+    assert len(obj.children) == 1
+    assert subj.children[0][0].word == "The"
+    assert obj.children[0][0].word == "the"
+
 def test_diaparser(base_config):
     config = OmegaConf.merge(base_config, {
         'parser': {
@@ -23,7 +73,7 @@ def test_diaparser(base_config):
     parser = DiaParserTreeParser(config)
     
     sentence = "The cat chases the mouse."
-    tree = parser.parse_single(sentence)
+    tree = parser.parse_all([sentence])
     
     # Check tree structure
     assert tree.root is not None
@@ -65,6 +115,60 @@ def test_multi_parser(base_config):
         assert isinstance(node.pos_tag, str)
         assert node.pos_tag != ""
         assert 'morph_features' in node.features
+
+def test_parser_preprocessing(base_config):
+    """Test preprocessing integration with parser"""
+    config = OmegaConf.merge(base_config, {
+        'parser': {
+            'type': 'diaparser',
+            'language': 'en'
+        },
+        'preprocessing': {
+            'strictness_level': 2,
+            'tokenizer': 'regex',
+            'remove_punctuation': True,
+            'language': 'en',
+            'preserve_case': False,
+            'normalize_unicode': True,
+            'remove_numbers': False,
+            'max_token_length': 50,
+            'min_token_length': 1
+        }
+    })
+    
+    parser = DiaParserTreeParser(config)
+    
+    # Test preprocessing pipeline
+    sentence = "The quick,  brown   fox!"
+    tokens = parser.preprocess_and_tokenize(sentence)
+    assert tokens == ['The', 'quick', 'brown', 'fox']
+
+    # Test full parsing with preprocessing
+    tree = parser.parse_single(sentence)
+    nodes = tree.root.get_subtree_nodes()
+    words = [node.word for node in nodes]
+    assert words == tokens
+
+def test_parser_with_unicode(base_config):
+    """Test parser handling of unicode text"""
+    config = OmegaConf.merge(base_config, {
+        'parser': {
+            'type': 'diaparser',
+            'language': 'en'
+        },
+        'preprocessing': {
+            'strictness_level': 3,
+            'normalize_unicode': True
+        }
+    })
+    
+    parser = DiaParserTreeParser(config)
+    
+    sentence = "The café is nice."
+    tree = parser.parse_single(sentence)
+    nodes = tree.root.get_subtree_nodes()
+    words = [node.word for node in nodes]
+    assert 'cafe' in words  # accent removed
 
 class TestMultiParser:
     @pytest.fixture

@@ -35,14 +35,27 @@ class MultiParser(BaseTreeParser):
         self.initialized = True
 
     def parse_batch(self, sentences: List[str]) -> List[DependencyTree]:
+        if self.verbose == 'info' or self.verbose == 'debug':
+            self.logger.info("Begin processing with multi parser")
+
+        # First do preprocessing once
+        processed_sentences = []
+        for sentence in sentences:
+            tokens = self.preprocess_and_tokenize(sentence)
+            processed_text = ' '.join(tokens)
+            processed_sentences.append(processed_text)
+            
+            if self.verbose == 'debug':
+                self.logger.debug(f"Preprocessed '{sentence}' to '{processed_text}'")
+
         # Get parses from all enabled parsers
         parser_results = {}
         for name, parser in self.parsers.items():
-            parser_results[name] = parser.parse_batch(sentences)
+            parser_results[name] = parser.parse_batch(processed_sentences)
         
         # Combine results into final trees
         combined_trees = []
-        for i in range(len(sentences)):
+        for i in range(len(processed_sentences)):
             # Start with the base tree structure from preferred parser
             base_parser = self.feature_sources['tree_structure']
             if base_parser not in parser_results:
@@ -58,6 +71,11 @@ class MultiParser(BaseTreeParser):
             )
             
             combined_trees.append(base_tree)
+
+            if self.verbose == 'debug':
+                self.logger.debug(f"\nProcessed sentence {i+1}/{len(processed_sentences)}")
+                self.logger.debug(f"Combined features from {len(parser_results)} parsers")
+
         
         return combined_trees
 

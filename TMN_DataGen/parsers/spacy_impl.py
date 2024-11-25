@@ -14,11 +14,41 @@ class SpacyTreeParser(BaseTreeParser):
             self.model = spacy.load(model_name)
     
     def parse_batch(self, sentences: List[str]) -> List[DependencyTree]:
-        docs = self.model.pipe(sentences)
-        return [self._convert_to_tree(doc) for doc in docs]
+        if self.verbose == 'info' or self.verbose == 'debug':
+            self.logger.info("Begin Spacy batch processing")
+        processed_sentences = []
+        for sentence in sentences:
+            if self.verbose == 'info' or self.verbose == 'debug':
+                self.logger.info(f"Processing {sentence} with Spacy")
+            # Preprocess first
+            tokens = self.preprocess_and_tokenize(sentence)
+            # Join tokens for spaCy - it expects a text string
+            processed_text = ' '.join(tokens)
+            processed_sentences.append(processed_text)
+            
+            if self.verbose == 'debug':
+                self.logger.debug(f"Preprocessed '{sentence}' to '{processed_text}'")
+
+        docs = self.model.pipe(processed_sentences)
+        trees = [self._convert_to_tree(doc) for doc in docs]
+        if self.verbose == 'debug':
+            for sent, tree in zip(processed_sentences, trees):
+                self.logger.debug(f"\nSpacy processed sentence: {sent}")
+                self.logger.debug(f"Generated Spacy tree with {len(tree.root.get_subtree_nodes())} nodes")
+
     
     def parse_single(self, sentence: str) -> DependencyTree:
-        doc = self.model(sentence)
+        if self.verbose == 'info' or self.verbose == 'debug':
+            self.logger.info("Begin Spacy single processing")
+        # Preprocess
+        if self.verbose == 'info' or self.verbose == 'debug':
+            self.logger.info(f"Processing {sentence} with Spacy")
+        tokens = self.preprocess_and_tokenize(sentence)
+        processed_text = ' '.join(tokens)
+
+        if self.verbose == 'debug':
+            self.logger.debug(f"Preprocessed '{sentence}' to '{processed_text}'")
+        doc = self.model(processed_text)
         return self._convert_to_tree(doc)
     
     def _convert_to_tree(self, doc: Any) -> DependencyTree:
@@ -46,5 +76,12 @@ class SpacyTreeParser(BaseTreeParser):
             else:
                 parent = nodes[token.head.i]
                 parent.add_child(nodes[token.i], token.dep_)
+
+        if not root:
+            raise ValueError("No root node found in parse")
         
-        return DependencyTree(root)
+        tree = DependencyTree(root, self.config)
+        if self.verbose == 'debug':
+            self.logger.debug("Tree structure created successfully")
+
+        return tree

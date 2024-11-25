@@ -12,6 +12,9 @@ class DependencyTree:
     def __init__(self, root: Node, config: Optional[DictConfig] = None):
         self.root = root
         self.config = config or {}
+        # Verify tree structure
+        if not self.root.verify_tree_structure():
+            raise ValueError("Invalid tree structure detected")
     
     def modify_subtree(self, condition_fn, modification_fn):
         """Apply modification to nodes that meet condition"""

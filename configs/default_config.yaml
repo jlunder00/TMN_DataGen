@@ -17,4 +17,17 @@ processing:
   max_sequence_length: 128
   lowercase: true
 
+preprocessing:
+  strictness_level: 1  # 0-3
+  tokenizer: "regex"   # "regex" or "stanza"
+  language: "en"
+  preserve_case: false
+  # Regex preprocessing options  
+  remove_punctuation: true
+  normalize_unicode: true
+  remove_numbers: false
+  # Tokenizer specific options
+  max_token_length: 50
+  min_token_length: 1
+
 verbose: "debug"  # Options: null, "normal", "debug"

@@ -18,10 +18,13 @@ from .dataset_generator import DatasetGenerator
 from .parsers.multi_parser import MultiParser
 from .utils.feature_utils import FeatureExtractor
 from .utils.viz_utils import print_tree_text, visualize_tree_graphviz, format_tree_pair
+from .utils.text_preprocessing import BasePreprocessor 
+from .utils.tokenizers import BaseTokenizer, RegexTokenizer, StanzaTokenizer
 
 __all__ = [
     'Node', 'DependencyTree',
     'DiaParserTreeParser', 'SpacyTreeParser', 'MultiParser',
     'DatasetGenerator', 'FeatureExtractor',
-    'print_tree_text', 'visualize_tree_graphviz', 'format_tree_pair'
+    'print_tree_text', 'visualize_tree_graphviz', 'format_tree_pair',
+    'BasePreprocessor', 'BaseTokenizer', 'RegexTokenizer', 'StanzaTokenizer'
 ]
