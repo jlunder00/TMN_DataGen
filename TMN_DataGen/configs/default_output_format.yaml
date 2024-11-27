@@ -1,6 +1,6 @@
 output_format:
   type: "similarity"  # or "similarity" 
-  # label_map:
+  label_map: null 
   #   entailment: 1
   #   neutral: 0
   #   contradiction: -1

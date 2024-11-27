@@ -127,7 +127,7 @@ class DatasetGenerator:
                 )
 
         self.config = config
-        if self.config.output_format.label_map:
+        if self.config.output_format.label_map is not None:
             self.label_map = self.config.output_format.label_map
         # Initialize parser
         parser = MultiParser(config, pkg_config, self.logger)
@@ -186,7 +186,7 @@ class DatasetGenerator:
                     raise ValueError(f"Invalid label: {label}")
 
                 label = self.label_map[label] if self.label_map is not None else label
-                if self.config.normalize:
+                if self.config.output_format.normalize:
                     label = (float(label) - self.config.output_format.normalize.min) / self.config.output_format.normalize.max
 
             except Exception as e:
