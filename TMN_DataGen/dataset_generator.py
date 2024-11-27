@@ -13,18 +13,14 @@ from importlib.resources import files
 class DatasetGenerator:
     def __init__(self):
         """Initialize dataset generator without config - config provided per method call"""
-        self.label_map = {
-            'entailment': 1,
-            'contradiction': -1,
-            'neutral': 0
-        }
-
+        self.label_map = None
 
     def _load_configs(
         self,
         parser_config: Optional[Union[str, Dict]] = None,
         preprocessing_config: Optional[Union[str, Dict]] = None,
         feature_config: Optional[Union[str, Dict]] = None,
+        output_config: Optional[Union[str, Dict]] = None,
         verbosity: str = 'normal',
         override_pkg_config: Optional[Union[str, Dict]] = None
     ) -> Dict:
@@ -43,6 +39,9 @@ class DatasetGenerator:
             config.update(yaml.safe_load(f))
 
         with open(config_dir / 'default_feature_config.yaml') as f:
+            config.update(yaml.safe_load(f))
+
+        with open(config_dir / 'default_output_format.yaml') as f:
             config.update(yaml.safe_load(f))
             
         # Add verbosity
@@ -79,6 +78,12 @@ class DatasetGenerator:
                 if key in feature_config:
                     config[key].update(feature_config[key])
 
+        if output_config:
+            if isinstance(output_config, str):
+                with open(output_config) as f:
+                    output_config = yaml.safe_load(f)
+            config['output_format'].update(output_config)
+
         return OmegaConf.create(config), pkg_config
 
     def generate_dataset(
@@ -89,6 +94,7 @@ class DatasetGenerator:
         parser_config: Optional[Union[str, Dict]] = None,
         preprocessing_config: Optional[Union[str, Dict]] = None,
         feature_config: Optional[Union[str, Dict]] = None,
+        output_config: Optional[Union[str, Dict]] = None,
         verbosity: str = 'normal',
         override_pkg_config: Optional[Union[str, Dict]] = None,
         show_progress: bool = True
@@ -111,6 +117,7 @@ class DatasetGenerator:
             parser_config,
             preprocessing_config,
             feature_config,
+            output_config,
             verbosity,
             override_pkg_config
         )
@@ -119,8 +126,12 @@ class DatasetGenerator:
                 verbosity
                 )
 
+        self.config = config
+        if self.config.output_format.label_map:
+            self.label_map = self.config.output_format.label_map
         # Initialize parser
         parser = MultiParser(config, pkg_config, self.logger)
+
 
         # Process sentence pairs
         if verbosity != 'quiet':
@@ -167,15 +178,25 @@ class DatasetGenerator:
                 skipped_count += 1
                 continue
                 
-            # Handle valid labels
-            if label not in self.label_map:
-                self.logger.error(f"Invalid label '{label}' encountered. Expected one of: {list(self.label_map.keys())}")
-                raise ValueError(f"Invalid label: {label}")
+
+            try:
+                # Handle valid labels
+                if self.label_map is not None and label not in self.label_map:
+                    self.logger.error(f"Invalid label '{label}' encountered. Expected one of: {list(self.label_map.keys())}")
+                    raise ValueError(f"Invalid label: {label}")
+
+                label = self.label_map[label] if self.label_map is not None else label
+                if self.config.normalize:
+                    label = (float(label) - self.config.output_format.normalize.min) / self.config.output_format.normalize.max
+
+            except Exception as e:
+                self.logger.error(f"Error while processing labels: {e}, exiting")
+                raise e 
                 
             graph1 = tree1.to_graph_data()
             graph2 = tree2.to_graph_data()
             graph_pairs.append((graph1, graph2))
-            numeric_labels.append(self.label_map[label])
+            numeric_labels.append(label)
         
         if skipped_count > 0:
             skip_percent = (skipped_count / len(labels)) * 100

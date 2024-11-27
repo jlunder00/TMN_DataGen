@@ -1,0 +1,11 @@
+output_format:
+  type: "similarity"  # or "similarity" 
+  # label_map:
+  #   entailment: 1
+  #   neutral: 0
+  #   contradiction: -1
+  normalize:
+    min: -2.5
+    max: 2.5
+  # Or for similarity:
+  # similarity_range: [0, 1]  # Output range for similarity scores
