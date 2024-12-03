@@ -7,5 +7,5 @@ preprocessing:
   remove_punctuation: true
   normalize_unicode: true
   remove_numbers: false
-  max_token_length: 50
-  min_token_length: 1
+  max_token_length: 30
+  min_token_length: 5

@@ -26,28 +26,167 @@ feature_mappings:
     - VERB
     - X
 
+  # dep_types:
+  #   # Base types
+  #   - nsubj
+  #   - obj
+  #   - iobj
+  #   - csubj
+  #   - ccomp 
+  #   - xcomp
+  #   - obl
+  #   - vocative 
+  #   - expl
+  #   - dislocated
+  #   - advcl
+  #   - advmod
+  #   - discourse
+  #   - aux
+  #   - cop
+  #   - mark
+  #   - nmod
+  #   - appos
+  #   - nummod
+  #   - acl
+  #   - amod
+  #   - det
+  #   - clf
+  #   - case
+  #   - conj
+  #   - cc
+  #   - fixed
+  #   - flat
+  #   - compound
+  #   - list
+  #   - parataxis
+  #   - orphan
+  #   - goeswith
+  #   - reparandum
+  #   - punct
+  #   - dep
+  #   - root
+
+  #   # Semi-mandatory subtypes
+  #   - acl:relcl
+  #   - advcl:relcl  
+  #   - aux:pass
+  #   - csubj:outer
+  #   - csubj:pass
+  #   - expl:impers
+  #   - expl:pass
+  #   - expl:pv
+  #   - nsubj:outer
+  #   - nsubj:pass
+  #   - obl:agent  
+  #   - obl:tmod
+  #   - obl:arg
+  #   - obl:lmod
+  #   - nmod:poss 
+  #   - nmod:tmod
+  #   - obl:npmod
+
   dep_types:
+    # Core arguments
     - nsubj
-    - obj 
+    - obj
     - iobj
-    - det
-    - nmod
-    - amod
+    - csubj
+    - ccomp
+    - xcomp
+
+    # Non-core dependents
+    - obl
+    - vocative
+    - expl
+    - dislocated
+    - advcl
     - advmod
-    - nummod
-    - appos
-    - conj
-    - cc
-    - punct
-    - root
+    - discourse
     - aux
     - cop
-    - case
     - mark
-    - compound
+
+    # Nominal dependents
+    - nmod
+    - appos
+    - nummod
     - acl
+    - amod
+    - det
+    - clf
+    - case
+
+    # Coordination and special relations
+    - conj
+    - cc
     - fixed
     - flat
+    - list
+    - parataxis
+    - compound
+    - orphan
+    - goeswith
+    - reparandum
+    - punct
+    - root
+    - dep
+
+    # Subtypes (including semi-mandatory ones)
+    - acl:relcl
+    - advcl:relcl
+    - advmod:emph
+    - advmod:lmod
+    - aux:pass
+    - case:gen
+    - cc:preconj
+    - compound:lvc
+    - compound:prt
+    - compound:redup
+    - compound:svc
+    - csubj:outer
+    - csubj:pass
+    - det:numgov
+    - det:nummod
+    - det:poss
+    - expl:impers
+    - expl:pass
+    - expl:pv
+    - flat:foreign
+    - flat:name
+    - nmod:poss
+    - nmod:tmod
+    - nummod:gov
+    - nsubj:outer
+    - nsubj:pass
+    - obl:agent
+    - obl:arg
+    - obl:lmod
+    - obl:tmod
+    - obl:npmod
+    - nmod:npmod
+
+  # dep_types:
+  #   - nsubj
+  #   - obj 
+  #   - iobj
+  #   - det
+  #   - nmod
+  #   - amod
+  #   - advmod
+  #   - nummod
+  #   - appos
+  #   - conj
+  #   - cc
+  #   - punct
+  #   - root
+  #   - aux
+  #   - cop
+  #   - case
+  #   - mark
+  #   - compound
+  #   - acl
+  #   - fixed
+  #   - flat
 
   morph_features:
     - Number

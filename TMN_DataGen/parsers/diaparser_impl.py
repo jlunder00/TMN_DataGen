@@ -75,51 +75,58 @@ class DiaParserTreeParser(BaseTreeParser):
         self.logger.debug(f"Parsing batch of {len(sentences)} sentences")
         
         for sentence in sentences:
+            try:
             
-            # Preprocess and tokenize first
-            tokens = self.preprocess_and_tokenize(sentence)
+                # Preprocess and tokenize first
+                tokens = self.preprocess_and_tokenize(sentence)
+                if len(tokens) == 0:
+                    self.logger.debug(f"\nNo tokens after tokenize in {sentence}, skipping")
+                    continue
 
-            self.logger.debug(f"\nParsing sentence: {sentence}")
-            
-            # Get DiaParser output
-            dataset = self.model.predict([tokens])
-            token_data = self._process_prediction(dataset)
-            
-            # Step 1: Create all nodes
-            nodes = []
-            for i in range(len(token_data['words'])):
-                node = Node(
-                    word=token_data['words'][i],
-                    lemma=token_data['lemmas'][i],
-                    pos_tag=token_data['pos_tags'][i],
-                    idx=i,
-                    features={
-                        'original_text': token_data['words'][i]
-                    }
-                )
-                nodes.append(node)
+                self.logger.debug(f"\nParsing sentence: {sentence}")
                 
-                self.logger.debug(f"Created node {i}: {node}")
+                # Get DiaParser output
+                dataset = self.model.predict([tokens])
+                token_data = self._process_prediction(dataset)
+                
+                # Step 1: Create all nodes
+                nodes = []
+                for i in range(len(token_data['words'])):
+                    node = Node(
+                        word=token_data['words'][i],
+                        lemma=token_data['lemmas'][i],
+                        pos_tag=token_data['pos_tags'][i],
+                        idx=i,
+                        features={
+                            'original_text': token_data['words'][i]
+                        }
+                    )
+                    nodes.append(node)
+                    
+                    self.logger.debug(f"Created node {i}: {node}")
 
-            # Step 2: Connect nodes using head indices
-            root = None
-            for i, (node, head_idx, rel) in enumerate(zip(nodes, 
-                                                         token_data['heads'],
-                                                         token_data['rels'])):
-                if head_idx == 0:  # Root node
-                    root = node
-                    self.logger.debug(f"Found root node: {node}")
-                else:
-                    # Head indices are 1-based in CoNLL format
-                    parent = nodes[head_idx - 1]
-                    parent.add_child(node, rel)
-                    self.logger.debug(f"Connected node {node} to parent {parent}")
+                # Step 2: Connect nodes using head indices
+                root = None
+                for i, (node, head_idx, rel) in enumerate(zip(nodes, 
+                                                             token_data['heads'],
+                                                             token_data['rels'])):
+                    if head_idx == 0:  # Root node
+                        root = node
+                        self.logger.debug(f"Found root node: {node}")
+                    else:
+                        # Head indices are 1-based in CoNLL format
+                        parent = nodes[head_idx - 1]
+                        parent.add_child(node, rel)
+                        self.logger.debug(f"Connected node {node} to parent {parent}")
+            except Exception as e:
+                self.logger.error(f"Error processing sentence {sentence}: {e}")
+                continue
 
             # Step 3: Verify we found a root and built valid tree
             if root is None:
                 raise ValueError(f"No root node found in parse: {sentence}")
 
-            tree = DependencyTree(root, config=self.config)
+            tree = DependencyTree(sentence, root, config=self.config)
             
             # Verify all nodes are reachable and structure is valid
             tree_nodes = tree.root.get_subtree_nodes()
@@ -137,7 +144,7 @@ class DiaParserTreeParser(BaseTreeParser):
 
             if self.verbose == 'debug':
                 from ..utils.viz_utils import print_tree_text
-                self.logger.info("\nDiapaarser parsed tree structure:")
+                self.logger.info("\nDiaparser parsed tree structure:")
                 self.logger.info(print_tree_text(tree, self.config))
 
             trees.append(tree)

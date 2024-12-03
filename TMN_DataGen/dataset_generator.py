@@ -143,21 +143,51 @@ class DatasetGenerator:
         self.logger.info("Parsing sentences...")
         all_trees = parser.parse_all(all_sentences, show_progress)
         
+
+        valid_pairs = []
+        valid_labels = []
         # Pair up trees
-        tree_pairs = [
-            (all_trees[i], all_trees[i+1]) 
-            for i in range(0, len(all_trees), 2)
-        ]
+        # tree_pairs = [
+        #     (all_trees[i], all_trees[i+1]) 
+        #     for i in range(0, len(all_trees), 2)
+        # ]
+        for i in range(0, len(all_trees), 2):
+            if i + 1 >= len(all_trees):
+                self.logger.warning(f"Uneven number of trees: {len(all_trees)}")
+                break
+                
+            # Get the pair of trees
+            tree1 = all_trees[i]
+            tree2 = all_trees[i+1]
+            
+            # Skip if either tree is None
+            if tree1 is None or tree2 is None:
+                self.logger.debug(f"Skipping pair {i//2} - missing tree")
+                continue
+                
+            pair_idx = i // 2
+            if pair_idx >= len(labels):
+                self.logger.error(f"Label index {pair_idx} out of range for {len(labels)} labels")
+                break
+                
+            valid_pairs.append((tree1, tree2))
+            valid_labels.append(labels[pair_idx])
 
         if verbosity == 'debug':
             self.logger.info("\nGenerated tree pairs:")
-            for (tree1, tree2), label in zip(tree_pairs, labels):
+            # for (tree1, tree2), label in zip(tree_pairs, labels):
+            for (tree1, tree2), label in zip(valid_pairs, valid_labels):
                 self.logger.info("\n" + "=" * 80)
                 self.logger.info(format_tree_pair(tree1, tree2, label))
                 self.logger.info("=" * 80)
 
+        if not valid_pairs:
+            raise ValueError("No valid tree pairs produced")
+
+        self.logger.info(f"Generated {len(valid_pairs)} valid pairs from {len(sentence_pairs)} original pairs")
         # Convert and save
-        dataset = self._convert_to_gmn_format(tree_pairs, labels)
+        # dataset = self._convert_to_gmn_format(tree_pairs, labels)
+        dataset = self._convert_to_gmn_format(valid_pairs, valid_labels)
         with open(output_path, 'w') as f:
             json.dump(dataset, f, indent=4)
 
@@ -186,7 +216,7 @@ class DatasetGenerator:
                     raise ValueError(f"Invalid label: {label}")
 
                 label = self.label_map[label] if self.label_map is not None else label
-                if self.config.output_format.normalize:
+                if self.config.output_format.normalize is not None:
                     label = (float(label) - self.config.output_format.normalize.min) / self.config.output_format.normalize.max
 
             except Exception as e:

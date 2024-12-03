@@ -18,6 +18,7 @@ class BatchProcessor:
     def __init__(self, 
                  input_file: str,
                  output_dir: str,
+                 max_lines: Optional[int] = None,
                  batch_size: int = 1000,
                  checkpoint_every: int = 5000,
                  verbosity: str = 'quiet',
@@ -28,6 +29,7 @@ class BatchProcessor:
                  num_workers: Optional[int] = None):
         self.input_file = input_file
         self.output_dir = Path(output_dir)
+        self.max_lines = max_lines
         self.batch_size = batch_size
         self.checkpoint_every = checkpoint_every
         self.verbosity = verbosity
@@ -131,8 +133,14 @@ class BatchProcessor:
     def _load_snli_data(self) -> List[Dict]:
         """Load SNLI data"""
         self.logger.info(f"Loading data from {self.input_file}")
+        data = []
         with open(self.input_file) as f:
-            data = [json.loads(line) for line in f]
+            next(f)
+            for i, line in enumerate(f):
+                if self.max_lines and i >= self.max_lines:
+                    break
+                data.append(json.loads(line))
+            # data = [json.loads(line) for line in f]
         self.logger.info(f"Loaded {len(data)} sentence pairs")
         return data
 
@@ -374,6 +382,7 @@ if __name__ == '__main__':
                               type=str, 
                               required=True,
                               help="Output directory path")
+    process_parser.add_argument("-ml", "--max_lines", type=int, help="Maximum number of lines to process")
     process_parser.add_argument("-sm", "--spacy_model",
                               type=str,
                               default="en_core_web_sm",
@@ -430,6 +439,7 @@ if __name__ == '__main__':
         processor = BatchProcessor(
             input_file=args.input_file,
             output_dir=args.out_dir,
+            max_lines=args.max_lines,
             batch_size=args.batch_size,
             checkpoint_every=1000,
             verbosity=args.verbosity,

@@ -10,12 +10,13 @@ except ImportError:
     from node import Node
 
 class DependencyTree:
-    def __init__(self, root: Node, config: Optional[DictConfig] = None):
+    def __init__(self, text: str, root: Node, config: Optional[DictConfig] = None):
         self.root = root
         self.config = config or {}
         # Cache feature dimensions
         self._feature_dims = None
         # Verify tree structure
+        self.text = text
         if not self.root.verify_tree_structure():
             raise ValueError("Invalid tree structure detected")
     
@@ -116,7 +117,8 @@ class DependencyTree:
             'from_idx': edge_indices[0].numpy().tolist(),
             'to_idx': edge_indices[1].numpy().tolist(),
             'graph_idx': [0] * len(nodes),
-            'n_graphs': 1
+            'n_graphs': 1,
+            'text': self.text
         }
     
     def to_dict(self) -> Dict:

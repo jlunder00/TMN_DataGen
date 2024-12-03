@@ -146,6 +146,6 @@ def format_tree_pair(
         result.append(f"{line1:<{max_len}}{line2}")
         
     if label:
-        result.append("\nRelationship: " + label)
+        result.append("\nRelationship: " + str(label))
         
     return "\n".join(result)
