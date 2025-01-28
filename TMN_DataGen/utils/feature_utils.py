@@ -36,34 +36,42 @@ class FeatureExtractor:
             
             # 3. Load model/tokenizer after mappings are ready
             model_cfg = self.config.get('feature_extraction', {})
-            self.model_name = model_cfg.get('word_embedding_model', 'bert-base-uncased')
-            self.use_gpu = model_cfg.get('use_gpu', True) and torch.cuda.is_available()
-            self.cache_embeddings = model_cfg.get('cache_embeddings', True)
-            self.embedding_cache_dir = Path(model_cfg.get('embedding_cache_dir', 'embedding_cache'))
-            
-            if self.cache_embeddings:
-                self.embedding_cache_dir.mkdir(parents=True, exist_ok=True)
-                self._load_embedding_cache()
+            self.do_not_compute_word_embeddings = model_cfg.get("do_not_compute_word_embeddings", False)
+            self.do_not_store_word_embeddings = model_cfg.get("do_not_store_word_embeddings", False)
+            self.use_lemma = model_cfg.get("use_lemma", False)
+            self.is_runtime = model_cfg.get("is_runtime", False)
 
-            self.device = torch.device('cuda' if self.use_gpu else 'cpu')
-            
-            try:
-                self.logger.info(f"Loading tokenizer and model: {self.model_name}")
-                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-                self.model = AutoModel.from_pretrained(self.model_name)
-                if self.use_gpu:
-                    self.model = self.model.to(self.device)
-                self.model.eval()
-                self.embedding_dim = self.model.config.hidden_size
-            except Exception as e:
-                self.logger.error(f"Failed to load model: {e}")
-                raise
+            if not self.do_not_compute_word_embeddings and not self.is_runtime:
+                self.model_name = model_cfg.get('word_embedding_model', 'bert-base-uncased')
+                self.use_gpu = model_cfg.get('use_gpu', True) and torch.cuda.is_available()
+                self.cache_embeddings = model_cfg.get('cache_embeddings', True)
+                self.embedding_cache_dir = Path(model_cfg.get('embedding_cache_dir', 'embedding_cache'))
+                
+                if self.cache_embeddings:
+                    self.embedding_cache_dir.mkdir(parents=True, exist_ok=True)
+                    self._load_embedding_cache()
 
-            self.logger.info(f"Feature dimensions - Embedding: {self.embedding_dim}, "
-                           f"POS: {self.pos_dim}, Dep: {self.dep_dim}, "
-                           f"Morph: {self.morph_dim}")
-            
-            self.initialized = True
+                self.device = torch.device('cuda' if self.use_gpu else 'cpu')
+                
+                try:
+                    self.logger.info(f"Loading tokenizer and model: {self.model_name}")
+                    self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                    self.model = AutoModel.from_pretrained(self.model_name)
+                    if self.use_gpu:
+                        self.model = self.model.to(self.device)
+                    self.model.eval()
+                    self.embedding_dim = self.model.config.hidden_size
+                except Exception as e:
+                    self.logger.error(f"Failed to load model: {e}")
+                    raise
+
+                self.logger.info(f"Feature dimensions - Embedding: {self.embedding_dim}, "
+                               f"POS: {self.pos_dim}, Dep: {self.dep_dim}, "
+                               f"Morph: {self.morph_dim}")
+                
+                self.initialized = True
+            else:
+                self.logger.info("Do not compute embeddings option set. Word embeddings will not be stored in node features or cached")
 
     def _initialize_feature_mappings(self) -> Dict[str, List[str]]:
         """Initialize all feature mappings with defaults or from config"""
@@ -112,7 +120,7 @@ class FeatureExtractor:
             self.logger.info("Loading embedding cache")
             cache_data = np.load(cache_file, allow_pickle=True)
             self.embedding_cache = {
-                str(word): torch.from_numpy(emb) 
+                str(word): torch.from_numpy(emb)
                 for word, emb in cache_data.items()
             }
         else:
@@ -132,6 +140,8 @@ class FeatureExtractor:
     def get_word_embedding(self, word: str) -> torch.Tensor:
         """Get BERT embedding for a word with caching"""
         if self.cache_embeddings and word in self.embedding_cache:
+            if self.do_not_store_word_embeddings and not self.is_runtime:
+                return None  # No need to spend time doing retrieval
             return self.embedding_cache[word]
 
         inputs = self.tokenizer(
@@ -156,7 +166,7 @@ class FeatureExtractor:
             
             if self.cache_embeddings:
                 self.embedding_cache[word] = embedding
-                if len(self.embedding_cache) % 1000 == 0:  # Periodic saving
+                if len(self.embedding_cache) % 100 == 0:  # Periodic saving
                     self._save_embedding_cache()
                     
             return embedding
@@ -187,9 +197,11 @@ class FeatureExtractor:
         """Create complete feature vector for a node"""
         features = []
         
-        # Word embedding (largest part)
-        word_emb = self.get_word_embedding(node.word)
-        features.append(word_emb)
+        if not self.do_not_compute_word_embeddings:
+            # Word embedding (largest part)
+            word_emb = self.get_word_embedding(node.word)
+            if not self.do_not_store_word_embeddings:
+                features.append(word_emb)
         
         # POS tag one-hot
         pos_emb = self.get_feature_embedding(node.pos_tag, 'pos_tags')
@@ -213,6 +225,26 @@ class FeatureExtractor:
             self.logger.error(f"Error concatenating features for node {node.word}: {e}")
             self.logger.debug(f"Feature shapes: {[f.shape for f in features]}")
             raise
+
+    def prepend_node_features_with_word_emb(self, word, features) -> torch.Tensor:
+        new_features = []
+        word_emb = self.get_word_embedding(word)
+        new_features.append(word_emb)
+        new_features.append(torch.tensor(features))
+        try:
+            return torch.cat(new_features)
+        except Exception as e:
+            self.logger.error(f"Error concatenating prepended word embedding to node features for node {word}: {e}")
+            self.logger.debug(f"Feature shapes: {[f.shape for f in features]}")
+            self.logger.debug(f"word embedding shape: {new_features[0].shape}, other features shape: {new_features[1].shape}")
+            raise
+
+    def prepend_tree_features_with_word_emb(self, tree_json) -> Dict:
+        for i, node_features in enumerate(tree_json['node_features']):
+            word, lemma = tree_json['node_texts']
+            tree_json['node_features'][i] = self.prepend_node_features_with_word_emb(lemma if self.use_lemma else word, node_features)
+        return tree_json
+
 
     def create_edge_features(self, dep_type: str) -> torch.Tensor:
         """Create feature vector for an edge based on dependency type"""

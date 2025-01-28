@@ -88,11 +88,13 @@ class DependencyTree:
         node_features = torch.zeros(len(nodes), dims['node'])
         edge_indices = []  # Will convert to tensor after collecting all
         edge_features = []  # Will stack after collecting all
+        node_texts = []
         
         # Create node features
         for i, node in enumerate(nodes):
             try:
                 node_features[i] = extractor.create_node_features(node)
+                node_texts[i] = (node.word, node.lemma)
             except Exception as e:
                 raise ValueError(f"Failed to create features for node {node}: {e}")
             
@@ -118,6 +120,8 @@ class DependencyTree:
             'to_idx': edge_indices[1].numpy().tolist(),
             'graph_idx': [0] * len(nodes),
             'n_graphs': 1,
+            'node_texts': node_texts,  # Save word instead of embedding to save space, compute (or retrieve from cache) at training time per batch
+            'node_features_need_word_embs_prepended': extractor.do_not_compute_word_embeddings or extractor.do_not_store_word_embeddings,
             'text': self.text
         }
     

@@ -4,6 +4,8 @@ feature_extraction:
   use_gpu: true  
   cache_embeddings: true
   embedding_cache_dir: embedding_cache 
+  do_not_store_word_embs: True
+  do_not_compute_word_embs: False
   batch_size: 32
 
 feature_mappings:

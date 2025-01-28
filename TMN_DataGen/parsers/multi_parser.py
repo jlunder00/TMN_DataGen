@@ -131,33 +131,6 @@ class MultiParser(BaseTreeParser):
                 self.logger.error(f"Failed to combine features for sentence {i}: {e}")
                 continue
 
-        # if not combined_trees:
-        #     self.logger.warning("No valid trees produced")
-        # elif len(combined_trees) != len(sentences):
-        #     self.logger.warning(f"Only {len(combined_trees)}/{len(sentences)} sentences successfully parsed")
-        
-
-        # for i in range(len(processed_sentences)):
-        #     # Start with the base tree structure from preferred parser
-        #     base_parser = self.config.parser.feature_sources['tree_structure']
-        #     if base_parser not in parser_results:
-        #         raise ValueError(f"Base parser {base_parser} not available")
-        #     
-        #     base_tree = parser_results[base_parser][i]
-        #     base_tree.config = self.config  # Propagate config
-        #     
-        #     # Enhance with features from other parsers
-        #     self._enhance_tree(
-        #         base_tree,
-        #         {name: results[i] for name, results in parser_results.items()}
-        #     )
-        #     
-        #     combined_trees.append(base_tree)
-
-        #     self.logger.debug(f"\nProcessed sentence {i+1}/{len(processed_sentences)}")
-        #     self.logger.debug(f"Combined features from {len(parser_results)} parsers")
-
-        
         # return combined_trees
         return final_trees
 
