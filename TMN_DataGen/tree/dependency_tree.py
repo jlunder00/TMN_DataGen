@@ -1,4 +1,4 @@
-#dependency_tree.py
+#TMN_DataGen/tree/dependency_tree.py
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 import torch
@@ -94,7 +94,7 @@ class DependencyTree:
         for i, node in enumerate(nodes):
             try:
                 node_features[i] = extractor.create_node_features(node)
-                node_texts[i] = (node.word, node.lemma)
+                node_texts.append((node.word, node.lemma))
             except Exception as e:
                 raise ValueError(f"Failed to create features for node {node}: {e}")
             
@@ -121,7 +121,7 @@ class DependencyTree:
             'graph_idx': [0] * len(nodes),
             'n_graphs': 1,
             'node_texts': node_texts,  # Save word instead of embedding to save space, compute (or retrieve from cache) at training time per batch
-            'node_features_need_word_embs_prepended': extractor.do_not_compute_word_embeddings or extractor.do_not_store_word_embeddings,
+            'node_features_need_word_embs_prepended': extractor.do_not_store_word_embeddings,
             'text': self.text
         }
     

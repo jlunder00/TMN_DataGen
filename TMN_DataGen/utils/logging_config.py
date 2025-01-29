@@ -18,7 +18,7 @@ def setup_logger(name: str, verbosity: str = 'normal') -> logging.Logger:
         handler = logging.StreamHandler(sys.stdout)
         
         formatter = logging.Formatter(
-            '%(message)s',  # Simplified format
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Simplified format
             datefmt='%H:%M:%S'
         )
         handler.setFormatter(formatter)
@@ -35,6 +35,7 @@ def setup_logger(name: str, verbosity: str = 'normal') -> logging.Logger:
         handler.setLevel(level)
         
         logger.addHandler(handler)
+        logger.debug(f"Created logger '{name}' with level {logging.getLevelName(level)}")
     
     return logger
 

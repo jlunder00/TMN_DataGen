@@ -1,6 +1,7 @@
 # TMN_DataGen/TMN_DataGen/utils/feature_utils.py
 
 import torch
+from tqdm import tqdm
 from typing import Dict, List, Optional, Set
 from transformers import AutoTokenizer, AutoModel
 from omegaconf import DictConfig
@@ -9,22 +10,32 @@ from pathlib import Path
 import json
 import numpy as np
 from ..utils.logging_config import setup_logger
+from ..utils.embedding_cache import ParallelEmbeddingCache
 
 class FeatureExtractor:
     _instance = None
+    _logger = None
+
+    @classmethod
+    def _get_logger(cls, verbosity='normal'):
+        if cls._logger is None:
+            cls._logger = setup_logger('FeatureExtractor', verbosity)
+        return cls._logger
     
     def __new__(cls, config: Optional[DictConfig] = None):
         if cls._instance is None:
+            verbosity = config.get('verbose', 'normal') if config else 'normal'
+            cls._logger = cls._get_logger(verbosity)
+            cls._logger.debug("Creating new FeatureExtractor instance")
             cls._instance = super(FeatureExtractor, cls).__new__(cls)
         return cls._instance
 
     def __init__(self, config: Optional[DictConfig] = None):
         if not hasattr(self, 'initialized'):
             self.config = config or {}
-            self.logger = setup_logger(
-                self.__class__.__name__,
-                self.config.get('verbose', 'normal')
-            )
+            self.logger = self._logger
+
+            self.logger.info("Initializing Feature Extractor")
             
             # 1. Initialize feature mappings first
             self.feature_mappings = self._initialize_feature_mappings()
@@ -36,42 +47,49 @@ class FeatureExtractor:
             
             # 3. Load model/tokenizer after mappings are ready
             model_cfg = self.config.get('feature_extraction', {})
-            self.do_not_compute_word_embeddings = model_cfg.get("do_not_compute_word_embeddings", False)
+            self.logger.info(f"feature extractor config loaded: {model_cfg}")
+            self.logger.info(f"overall config: {self.config}")
             self.do_not_store_word_embeddings = model_cfg.get("do_not_store_word_embeddings", False)
             self.use_lemma = model_cfg.get("use_lemma", False)
             self.is_runtime = model_cfg.get("is_runtime", False)
 
-            if not self.do_not_compute_word_embeddings and not self.is_runtime:
-                self.model_name = model_cfg.get('word_embedding_model', 'bert-base-uncased')
-                self.use_gpu = model_cfg.get('use_gpu', True) and torch.cuda.is_available()
-                self.cache_embeddings = model_cfg.get('cache_embeddings', True)
-                self.embedding_cache_dir = Path(model_cfg.get('embedding_cache_dir', 'embedding_cache'))
-                
-                if self.cache_embeddings:
-                    self.embedding_cache_dir.mkdir(parents=True, exist_ok=True)
-                    self._load_embedding_cache()
+            self.model_name = model_cfg.get('word_embedding_model', 'bert-base-uncased')
+            self.use_gpu = model_cfg.get('use_gpu', True) and torch.cuda.is_available()
+            self.cache_embeddings = model_cfg.get('cache_embeddings', True)
+            self.embedding_cache_dir = Path(model_cfg.get('embedding_cache_dir', 'embedding_cache'))
+            
+            if self.cache_embeddings:
+                self.embedding_cache_dir.mkdir(parents=True, exist_ok=True)
+                self.embedding_cache = ParallelEmbeddingCache(
+                    cache_dir = self.embedding_cache_dir,
+                    shard_size = model_cfg.get("shard_size", 10000),
+                    num_workers = model_cfg.get("num_workers", None),
+                    config = model_cfg
+                )
+                # self._load_embedding_cache()
+                self.embedding_cache.load()
 
-                self.device = torch.device('cuda' if self.use_gpu else 'cpu')
-                
-                try:
-                    self.logger.info(f"Loading tokenizer and model: {self.model_name}")
-                    self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-                    self.model = AutoModel.from_pretrained(self.model_name)
-                    if self.use_gpu:
-                        self.model = self.model.to(self.device)
-                    self.model.eval()
-                    self.embedding_dim = self.model.config.hidden_size
-                except Exception as e:
-                    self.logger.error(f"Failed to load model: {e}")
-                    raise
+            self.logger.info("setting device")
+            self.device = torch.device('cuda' if self.use_gpu else 'cpu')
+            self.logger.info("device set")
+            
+            try:
+                self.logger.info(f"Loading tokenizer and model: {self.model_name}")
+                self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+                self.model = AutoModel.from_pretrained(self.model_name)
+                if self.use_gpu:
+                    self.model = self.model.to(self.device)
+                self.model.eval()
+                self.embedding_dim = self.model.config.hidden_size if not self.do_not_store_word_embeddings else 0
+            except Exception as e:
+                self.logger.error(f"Failed to load model: {e}")
+                raise
 
-                self.logger.info(f"Feature dimensions - Embedding: {self.embedding_dim}, "
-                               f"POS: {self.pos_dim}, Dep: {self.dep_dim}, "
-                               f"Morph: {self.morph_dim}")
-                
-                self.initialized = True
-            else:
-                self.logger.info("Do not compute embeddings option set. Word embeddings will not be stored in node features or cached")
+            self.logger.info(f"Feature dimensions - Embedding: {self.embedding_dim}, "
+                           f"POS: {self.pos_dim}, Dep: {self.dep_dim}, "
+                           f"Morph: {self.morph_dim}")
+            
+            self.initialized = True
 
     def _initialize_feature_mappings(self) -> Dict[str, List[str]]:
         """Initialize all feature mappings with defaults or from config"""
@@ -119,23 +137,25 @@ class FeatureExtractor:
         if cache_file.exists():
             self.logger.info("Loading embedding cache")
             cache_data = np.load(cache_file, allow_pickle=True)
-            self.embedding_cache = {
-                str(word): torch.from_numpy(emb)
-                for word, emb in cache_data.items()
-            }
+            self.logger.info("Embedding cache load started")
+            self.logger.info(f"Embedding cache contains {len(cache_data.values())} items")
+            self.embedding_cache = {}
+            for word, emb in tqdm(cache_data.items()):
+                self.embedding_cache[word] = torch.from_numpy(emb)
         else:
             self.embedding_cache = {}
 
     def _save_embedding_cache(self):
         """Save cached embeddings"""
         if not self.cache_embeddings:
+            self.logger.info("NOT SAVING EMBEDDINGS TO CACHE")
             return
-            
-        cache_file = self.embedding_cache_dir / "embedding_cache.npz"
-        np.savez(
-            cache_file, 
-            **{word: emb.numpy() for word, emb in self.embedding_cache.items()}
-        )
+        self.embedding_cache.save() 
+        # cache_file = self.embedding_cache_dir / "embedding_cache.npz"
+        # np.savez(
+        #     cache_file, 
+        #     **{word: emb.numpy() for word, emb in self.embedding_cache.items()}
+        # )
 
     def get_word_embedding(self, word: str) -> torch.Tensor:
         """Get BERT embedding for a word with caching"""
@@ -196,12 +216,10 @@ class FeatureExtractor:
     def create_node_features(self, node) -> torch.Tensor:
         """Create complete feature vector for a node"""
         features = []
-        
-        if not self.do_not_compute_word_embeddings:
-            # Word embedding (largest part)
-            word_emb = self.get_word_embedding(node.word)
-            if not self.do_not_store_word_embeddings:
-                features.append(word_emb)
+        # Word embedding (largest part)
+        word_emb = self.get_word_embedding(node.word)
+        if not self.do_not_store_word_embeddings:
+            features.append(word_emb)
         
         # POS tag one-hot
         pos_emb = self.get_feature_embedding(node.pos_tag, 'pos_tags')

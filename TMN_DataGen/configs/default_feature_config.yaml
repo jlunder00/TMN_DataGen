@@ -3,10 +3,15 @@ feature_extraction:
   word_embedding_model: bert-base-uncased
   use_gpu: true  
   cache_embeddings: true
-  embedding_cache_dir: embedding_cache 
-  do_not_store_word_embs: True
-  do_not_compute_word_embs: False
+  embedding_cache_dir: embedding_cache1 
+  do_not_store_word_embeddings: True
+  do_not_compute_word_embeddings: False
   batch_size: 32
+  num_workers: 12
+  shard_size: 10000
+  remove_old_cache: False
+  is_runtime: False
+  
 
 feature_mappings:
   pos_tags:
@@ -27,65 +32,6 @@ feature_mappings:
     - SYM
     - VERB
     - X
-
-  # dep_types:
-  #   # Base types
-  #   - nsubj
-  #   - obj
-  #   - iobj
-  #   - csubj
-  #   - ccomp 
-  #   - xcomp
-  #   - obl
-  #   - vocative 
-  #   - expl
-  #   - dislocated
-  #   - advcl
-  #   - advmod
-  #   - discourse
-  #   - aux
-  #   - cop
-  #   - mark
-  #   - nmod
-  #   - appos
-  #   - nummod
-  #   - acl
-  #   - amod
-  #   - det
-  #   - clf
-  #   - case
-  #   - conj
-  #   - cc
-  #   - fixed
-  #   - flat
-  #   - compound
-  #   - list
-  #   - parataxis
-  #   - orphan
-  #   - goeswith
-  #   - reparandum
-  #   - punct
-  #   - dep
-  #   - root
-
-  #   # Semi-mandatory subtypes
-  #   - acl:relcl
-  #   - advcl:relcl  
-  #   - aux:pass
-  #   - csubj:outer
-  #   - csubj:pass
-  #   - expl:impers
-  #   - expl:pass
-  #   - expl:pv
-  #   - nsubj:outer
-  #   - nsubj:pass
-  #   - obl:agent  
-  #   - obl:tmod
-  #   - obl:arg
-  #   - obl:lmod
-  #   - nmod:poss 
-  #   - nmod:tmod
-  #   - obl:npmod
 
   dep_types:
     # Core arguments
@@ -166,29 +112,6 @@ feature_mappings:
     - obl:tmod
     - obl:npmod
     - nmod:npmod
-
-  # dep_types:
-  #   - nsubj
-  #   - obj 
-  #   - iobj
-  #   - det
-  #   - nmod
-  #   - amod
-  #   - advmod
-  #   - nummod
-  #   - appos
-  #   - conj
-  #   - cc
-  #   - punct
-  #   - root
-  #   - aux
-  #   - cop
-  #   - case
-  #   - mark
-  #   - compound
-  #   - acl
-  #   - fixed
-  #   - flat
 
   morph_features:
     - Number

@@ -166,4 +166,5 @@ cython_debug/
 
 embedding_cache/
 embedding_cache/*
-
+embedding_cache1/
+embedding_cache1/*
