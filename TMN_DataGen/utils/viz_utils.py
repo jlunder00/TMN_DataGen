@@ -24,6 +24,9 @@ def print_tree_text(tree: DependencyTree, config: Optional[DictConfig] = None) -
         ├── cat (NOUN) --nsubj--> [Number=Sing]
         └── mouse (NOUN) --obj--> [Number=Sing]
     """
+    if tree is None:
+        return f'Cannot render object that is not a DependencyTree. Got: {tree}'
+
     show_features = config.get('visualization', {}).get('show_features', False) if config else False
     
     def _build_lines(node: Node, prefix: str = "", is_last: bool = True) -> list[str]:

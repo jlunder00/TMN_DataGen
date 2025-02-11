@@ -67,3 +67,32 @@ class BasePreprocessor:
             text = text.lower()
             
         return text
+
+
+class SentenceSplitter:
+    """Split text into sentences based on common terminators"""
+    
+    def __init__(self):
+        # Basic sentence terminator pattern
+        self.terminators = r'[.!?]+'
+        self.split_pattern = f'({self.terminators}\\s+)'
+        
+    def split(self, text: str) -> List[str]:
+        """Split text into sentences, preserving terminators"""
+        # Split on terminators but keep them
+        parts = re.split(self.split_pattern, text.strip())
+        
+        # Combine parts into complete sentences
+        sentences = []
+        current = ""
+        for part in parts:
+            current += part
+            if re.search(self.terminators, part):
+                sentences.append(current.strip())
+                current = ""
+                
+        # Handle any remaining text
+        if current.strip():
+            sentences.append(current.strip())
+            
+        return sentences

@@ -42,13 +42,13 @@ class BaseTreeParser(ABC):
             self.initialized = True
     
     @abstractmethod
-    def parse_batch(self, sentences: List[str]) -> List[DependencyTree]:
-        """Parse a batch of sentences into dependency trees"""
+    def parse_batch(self, sentence_groups: List[List[str]]) -> List[List[DependencyTree]]:
+        """Parse a batch of sentence groups into dependency trees groups"""
         pass
     
     @abstractmethod
-    def parse_single(self, sentence: str) -> DependencyTree:
-        """Parse a single sentence into a dependency tree"""
+    def parse_single(self, sentence_group: List[str]) -> List[DependencyTree]:
+        """Parse a single sentence group into a dependency tree group"""
         pass
 
     def preprocess_and_tokenize(self, text: str) -> List[str]:
@@ -57,40 +57,38 @@ class BaseTreeParser(ABC):
         tokens = self.tokenizer.tokenize(clean_text)
         return tokens
     
-    def parse_all(self, sentences: List[str], show_progress: bool = True) -> List[DependencyTree]:
+    def parse_all(self, sentence_groups: List[List[str]], show_progress: bool = True) -> List[List[DependencyTree]]:
         """Parse all sentences with batching and progress bar."""
-        if not isinstance(sentences, list):
-            if hasattr(sentences, '__iter__'):
-                sentences = list(sentences)
-            else:
-                raise TypeError("sentences must be a list of strings")
-        
-        trees = []
-        total_sentences = len(sentences)
+        if not isinstance(sentence_groups, list):
+            raise TypeError("sentence_groups must be a list of lists of strings")
+
+        tree_groups = []
+        total_sentence_groups = len(sentence_groups)
         
         if self.verbose == 'normal' or self.verbose == 'debug':
-            self.logger.info(f"Processing {total_sentences} sentences total...")
+            self.logger.info(f"Processing {total_sentence_groups} sentence_groups total...")
         
         # Create batches
-        for i in range(0, total_sentences, self.batch_size):
-            batch = sentences[i:min(i + self.batch_size, total_sentences)]
+        for i in range(0, total_sentence_groups, self.batch_size):
+            batch = sentence_groups[i:min(i + self.batch_size, total_sentence_groups)]
             if show_progress and self.verbose == 'normal' or self.verbose == 'debug':
                 self.logger.info(f"Processing batch {i//self.batch_size + 1}...")
             
             batch_trees = self.parse_batch(batch)
             
             if self.verbose == 'debug':
-                for sent, tree in zip(batch, batch_trees):
+                for group, group_trees in zip(batch, batch_trees):
                     self.logger.debug("\n" + "="*80)
-                    self.logger.debug(f"Processed sentence: {sent}")
-                    self.logger.debug("\nTree structure:")
-                    self.logger.debug(print_tree_text(tree, self.config))
+                    for sent, tree in zip(group, group_trees):
+                        self.logger.debug(f"Processed sentence: {sent}")
+                        self.logger.debug("\nTree structure:")
+                        self.logger.debug(print_tree_text(tree, self.config))
                     self.logger.debug("="*80)
             
-            trees.extend(batch_trees)
+            tree_groups.extend(batch_trees)
         
         if show_progress and self.verbose == 'normal' or self.verbose == 'debug':
             self.logger.info("Done!")
         
-        return trees
+        return tree_groups
 

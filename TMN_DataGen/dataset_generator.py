@@ -6,6 +6,7 @@ import json
 from omegaconf import OmegaConf
 from .parsers import DiaParserTreeParser, SpacyTreeParser, MultiParser
 from .tree import DependencyTree
+from .utils.text_preprocessing import SentenceSplitter
 from .utils.viz_utils import format_tree_pair
 from .utils.logging_config import setup_logger
 from importlib.resources import files
@@ -14,6 +15,7 @@ class DatasetGenerator:
     def __init__(self):
         """Initialize dataset generator without config - config provided per method call"""
         self.label_map = None
+        self.sentence_splitter = SentenceSplitter()
 
     def _load_configs(
         self,
@@ -88,7 +90,7 @@ class DatasetGenerator:
 
     def generate_dataset(
         self,
-        sentence_pairs: List[Tuple[str, str]],
+        text_pairs: List[Tuple[str, str]],
         labels: List[str],
         output_path: str,
         parser_config: Optional[Union[str, Dict]] = None,
@@ -136,12 +138,21 @@ class DatasetGenerator:
         # Process sentence pairs
         if verbosity != 'quiet':
             self.logger.info("\nGenerating dataset...")
-            self.logger.info(f"Processing {len(sentence_pairs)} sentence pairs")
+            self.logger.info(f"Processing {len(text_pairs)} text pairs")
 
-        all_sentences = [s for pair in sentence_pairs for s in pair]
+        sentence_pairs = []
+        for pair in text_pairs:
+            pair_groups = []
+            for text in pair:
+                sentences = self.sentence_splitter.split(text)
+                pair_groups.append(sentences)
+            # pair_groups = self.filter_groups()
+            sentence_pairs.append((pair_groups[0], pair_groups[1]))
+
+        all_sentence_groups = [s for pair in sentence_pairs for s in pair]
         
         self.logger.info("Parsing sentences...")
-        all_trees = parser.parse_all(all_sentences, show_progress)
+        all_trees = parser.parse_all(all_sentence_groups, show_progress)
         
 
         valid_pairs = []
