@@ -25,6 +25,7 @@ class BatchProcessor:
                  parser_config: Optional[Dict] = None,
                  preprocessing_config: Optional[Dict] = None,
                  feature_config: Optional[Dict] = None,
+                 merge_config: Optional[Dict] = None,
                  num_partitions: Optional[int] = None,
                  num_workers: Optional[int] = None):
         self.input_file = input_file
@@ -36,6 +37,7 @@ class BatchProcessor:
         self.parser_config = parser_config
         self.preprocessing_config = preprocessing_config
         self.feature_config = feature_config
+        self.merge_config = merge_config
         self.num_partitions = num_partitions
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.num_workers = num_workers or max(1, cpu_count()-4)
@@ -144,6 +146,37 @@ class BatchProcessor:
         self.logger.info(f"Loaded {len(data)} sentence pairs")
         return data
 
+    def _load_question_groups(self) -> List[Dict]:
+        """Load question group data where each line contains related questions"""
+        self.logger.info(f"Loading data from {self.input_file}")
+        data = []
+        
+        with open(self.input_file) as f:
+            for i, line in enumerate(f):
+                if self.max_lines and i >= self.max_lines:
+                    break
+                    
+                # Split questions in group
+                questions = [
+                    q.strip()[2:] # Remove "q:" prefix
+                    for q in line.strip().split('\t')
+                    if q.startswith('q:') or q.startswith('a:')
+                ]
+                
+                if len(questions) < 2:
+                    continue # Skip groups with < 2 questions
+                    
+                # Create pair by using same text for both sides
+                # All pairs within group are positive examples
+                data.append({
+                    'text1': line.strip(), # Full line for group1
+                    'text2': line.strip(), # Same line for group2
+                    'group_id': f"group_{i}"
+                })
+                
+        self.logger.info(f"Loaded {len(data)} question groups")
+        return data
+
     def _calculate_partition_sizes(self, total_batches: int) -> List[int]:
         """Calculate number of batches per partition"""
         if not self.num_partitions:
@@ -189,17 +222,18 @@ class BatchProcessor:
         if not results:
             return
 
-        sentence_pairs, labels, pair_ids = zip(*results) 
+        text_pairs, labels, pair_ids = zip(*results) 
 
         output_path = self.output_dir / f'batch_{batch_idx}.json'
         self.generator.generate_dataset(
-            sentence_pairs=sentence_pairs,
+            text_pairs=text_pairs,
             labels=labels,
             output_path=str(output_path),
             verbosity=self.verbosity,
             parser_config=self.parser_config,
             preprocessing_config=self.preprocessing_config,
-            feature_config=self.feature_config
+            feature_config=self.feature_config,
+            merge_config = self.merge_config
         )
         
         self.processed_pairs.update(pair_ids)
@@ -268,7 +302,8 @@ class BatchProcessor:
         self.logger.info("\nStarting dataset processing")
         start_time = datetime.now()
         
-        data = self._load_snli_data()
+            # data = self._load_snli_data()
+        data = self._load_question_groups()
         total_batches = (len(data) + self.batch_size - 1) // self.batch_size
         partition_sizes = self._calculate_partition_sizes(total_batches)
         

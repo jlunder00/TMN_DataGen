@@ -59,20 +59,25 @@ class MultiParser(BaseTreeParser):
 
         # First do preprocessing once
         # processed_sentence_groups = []
+        max_trees = 4
         final_groups = [[None] for sentences in sentence_groups]
         valid_group_indices = []
         valid_inner_indices = {i:[] for i in range(len(sentence_groups))}
         for i, sentence_group in enumerate(sentence_groups):
             # processed_sentences = []
+            token_group = sorted([self.preprocess_and_tokenize(sentence) for sentence in sentence_group], key=lambda x: len(x))
             valid = []
-            for j, sentence in enumerate(sentence_group):
-                tokens = self.preprocess_and_tokenize(sentence)
+            for j, tokens in enumerate(token_group):
                 if not tokens:
                     self.logger.debug(f"Skipping sentence ({i}, {j}) due to no tokens after preprocessing: {sentence}")
                     valid.append(None)
                     continue
-                if len(tokens) < 3 or len(tokens) > 15:
+                if len(tokens) < 3 or len(tokens) > 20:
                     self.logger.debug(f"Skipping sentence ({i}, {j}) due too too many or too few tokens after preprocessing: {sentence}")
+                    valid.append(None)
+                    continue
+                if max_trees > 0 and j > max_trees-1:
+                    self.logger.debug(f"Skipping sentence ({i}, {j}) due to maximum sentences per group cutoff")
                     valid.append(None)
                     continue
                 # processed_text = ' '.join(tokens)

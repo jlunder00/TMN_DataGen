@@ -1,5 +1,5 @@
 # TMN_DataGen/TMN_DataGen/dataset_generator.py
-from typing import List, Tuple, Optional, Dict, Union
+from typing import List, Tuple, Optional, Dict, Union, NamedTuple
 from pathlib import Path
 import yaml
 import json
@@ -10,6 +10,17 @@ from .utils.text_preprocessing import SentenceSplitter
 from .utils.viz_utils import format_tree_pair
 from .utils.logging_config import setup_logger
 from importlib.resources import files
+import uuid
+
+class TreeGroup(NamedTuple):
+    """Helper class for tracking tree groups"""
+    group_id: str
+    original_text: str
+    trees: List[DependencyTree]
+
+def generate_group_id():
+    """Generate unique ID for groups"""
+    return str(uuid.uuid4())
 
 class DatasetGenerator:
     def __init__(self):
@@ -23,6 +34,7 @@ class DatasetGenerator:
         preprocessing_config: Optional[Union[str, Dict]] = None,
         feature_config: Optional[Union[str, Dict]] = None,
         output_config: Optional[Union[str, Dict]] = None,
+        merge_config: Optional[Union[str, Dict]] = None,
         verbosity: str = 'normal',
         override_pkg_config: Optional[Union[str, Dict]] = None
     ) -> Dict:
@@ -44,6 +56,9 @@ class DatasetGenerator:
             config.update(yaml.safe_load(f))
 
         with open(config_dir / 'default_output_format.yaml') as f:
+            config.update(yaml.safe_load(f))
+
+        with open(config_dir / 'default_merge_config.yaml') as f:
             config.update(yaml.safe_load(f))
             
         # Add verbosity
@@ -86,6 +101,12 @@ class DatasetGenerator:
                     output_config = yaml.safe_load(f)
             config['output_format'].update(output_config)
 
+        if merge_config:
+            if isinstance(merge_config, str):
+                with open(merge_config) as f:
+                    merge_config = yaml.safe_load(f)
+            config['merge'].update(merge_config)
+
         return OmegaConf.create(config), pkg_config
 
     def generate_dataset(
@@ -97,6 +118,7 @@ class DatasetGenerator:
         preprocessing_config: Optional[Union[str, Dict]] = None,
         feature_config: Optional[Union[str, Dict]] = None,
         output_config: Optional[Union[str, Dict]] = None,
+        merge_config: Optional[Union[str, Dict]] = None,
         verbosity: str = 'normal',
         override_pkg_config: Optional[Union[str, Dict]] = None,
         show_progress: bool = True
@@ -120,6 +142,7 @@ class DatasetGenerator:
             preprocessing_config,
             feature_config,
             output_config,
+            merge_config,
             verbosity,
             override_pkg_config
         )
@@ -137,73 +160,175 @@ class DatasetGenerator:
 
         # Process sentence pairs
         if verbosity != 'quiet':
-            self.logger.info("\nGenerating dataset...")
+            self.logger.info(f"\nGenerating dataset...")
             self.logger.info(f"Processing {len(text_pairs)} text pairs")
 
-        sentence_pairs = []
-        for pair in text_pairs:
-            pair_groups = []
-            for text in pair:
-                sentences = self.sentence_splitter.split(text)
-                pair_groups.append(sentences)
-            # pair_groups = self.filter_groups()
-            sentence_pairs.append((pair_groups[0], pair_groups[1]))
-
-        all_sentence_groups = [s for pair in sentence_pairs for s in pair]
+        # Split sentences and track groups
+        sentence_groups = []
+        group_metadata = []
         
-        self.logger.info("Parsing sentences...")
-        all_trees = parser.parse_all(all_sentence_groups, show_progress)
-        
-
-        valid_pairs = []
-        valid_labels = []
-        # Pair up trees
-        # tree_pairs = [
-        #     (all_trees[i], all_trees[i+1]) 
-        #     for i in range(0, len(all_trees), 2)
-        # ]
-        for i in range(0, len(all_trees), 2):
-            if i + 1 >= len(all_trees):
-                self.logger.warning(f"Uneven number of trees: {len(all_trees)}")
-                break
-                
-            # Get the pair of trees
-            tree1 = all_trees[i]
-            tree2 = all_trees[i+1]
+        for text1, text2 in text_pairs:
+            # Split into sentences
+            group1 = self.sentence_splitter.split(text1)
+            group2 = self.sentence_splitter.split(text2)
             
-            # Skip if either tree is None
-            if tree1 is None or tree2 is None:
-                self.logger.debug(f"Skipping pair {i//2} - missing tree")
+            # Create group metadata
+            group_id = generate_group_id()
+            metadata = {
+                'group_id': group_id,
+                'text1': text1,
+                'text2': text2
+            }
+            group_metadata.append(metadata)
+            
+            sentence_groups.extend([group1, group2])
+
+        # Parse all sentences
+        all_tree_groups = parser.parse_all(sentence_groups, show_progress)
+
+        # Organize trees with groups
+        tree_groups = []
+        for i in range(0, len(all_tree_groups), 2):
+            if i + 1 >= len(all_tree_groups):
                 continue
                 
-            pair_idx = i // 2
-            if pair_idx >= len(labels):
-                self.logger.error(f"Label index {pair_idx} out of range for {len(labels)} labels")
-                break
-                
-            valid_pairs.append((tree1, tree2))
-            valid_labels.append(labels[pair_idx])
+            meta = group_metadata[i//2]
+            group1 = TreeGroup(
+                group_id=meta['group_id'],
+                original_text=meta['text1'],
+                trees=all_tree_groups[i]
+            )
+            group2 = TreeGroup(
+                group_id=meta['group_id'], 
+                original_text=meta['text2'],
+                trees=all_tree_groups[i+1]
+            )
+            tree_groups.append((group1, group2))
 
-        if verbosity == 'debug':
-            self.logger.info("\nGenerated tree pairs:")
-            # for (tree1, tree2), label in zip(tree_pairs, labels):
-            for (tree1, tree2), label in zip(valid_pairs, valid_labels):
-                self.logger.info("\n" + "=" * 80)
-                self.logger.info(format_tree_pair(tree1, tree2, label))
-                self.logger.info("=" * 80)
+        # Convert based on format
+        if self.config.output_format.type == "infonce":
+            dataset = self._convert_to_infonce_format(tree_groups)
+        else:
+            # Convert tree groups to pairs for backwards compatibility
+            valid_pairs = []
+            valid_labels = []
+            for group1, group2 in tree_groups:
+                for t1 in group1.trees:
+                    for t2 in group2.trees:
+                        if t1 is not None and t2 is not None:
+                            valid_pairs.append((t1, t2))
+                            valid_labels.append(labels[len(valid_pairs)-1])
+            dataset = self._convert_to_gmn_format(valid_pairs, valid_labels)
 
-        if not valid_pairs:
-            raise ValueError("No valid tree pairs produced")
-
-        self.logger.info(f"Generated {len(valid_pairs)} valid pairs from {len(sentence_pairs)} original pairs")
-        # Convert and save
-        # dataset = self._convert_to_gmn_format(tree_pairs, labels)
-        dataset = self._convert_to_gmn_format(valid_pairs, valid_labels)
         with open(output_path, 'w') as f:
             json.dump(dataset, f, indent=4)
 
-        if verbosity != 'quiet':
-            self.logger.info(f"\nDataset saved to {output_path}")
+    def _convert_to_infonce_format(
+        self,
+        tree_groups: List[Tuple[TreeGroup, TreeGroup]]
+    ) -> Dict:
+        """Convert to InfoNCE format with group tracking"""
+        groups = []
+        
+        for group1, group2 in tree_groups:
+            # Convert all trees to graph format
+            trees1 = [
+                t.to_graph_data() for t in group1.trees 
+                if t is not None
+            ]
+            trees2 = [
+                t.to_graph_data() for t in group2.trees
+                if t is not None
+            ]
+            
+            if trees1 and trees2:  # Only add if both have valid trees
+                group_data = {
+                    "group_id": group1.group_id,
+                    "text1": group1.original_text,
+                    "text2": group2.original_text,
+                    "trees1": trees1,
+                    "trees2": trees2
+                }
+                groups.append(group_data)
+
+        return {
+            "version": "1.0",
+            "format": "infonce",
+            "requires_word_embeddings": self.config.feature_extraction.do_not_store_word_embeddings,
+            "groups": groups
+        }
+
+        # sentence_pairs = []
+        # for pair in text_pairs:
+        #     pair_groups = []
+        #     for text in pair:
+        #         sentences = self.sentence_splitter.split(text)
+        #         pair_groups.append(sentences)
+        #     # pair_groups = self.filter_groups()
+        #     sentence_pairs.append((pair_groups[0], pair_groups[1]))
+
+        # all_sentence_groups = [s for pair in sentence_pairs for s in pair]
+        # 
+        # self.logger.info("Parsing sentences...")
+        # all_tree_groups = parser.parse_all(all_sentence_groups, show_progress)
+        # 
+
+        # valid_pairs = []
+        # valid_labels = []
+        # # Pair up trees
+        # # tree_pairs = [
+        # #     (all_trees[i], all_trees[i+1]) 
+        # #     for i in range(0, len(all_trees), 2)
+        # # ]
+        # all_trees = []
+        # for i in range(0, len(all_tree_groups), 2):
+        #     if i + 1 >= len(all_tree_groups):
+        #         self.logger.warning(f"Uneven number of tree groups: {len(all_tree_groups)}")
+        #         break
+        #         
+        #     # Get the pair of trees
+        #     tree_group1 = all_tree_groups[i]
+        #     tree_group2 = all_tree_groups[i+1]
+        #     
+        #     for tree1 in tree_group1:
+        #         for tree2 in tree_group2:
+        #             all_trees.append(tree1)
+        #             all_trees.append(tree2)
+
+        # for i in range(0, len(all_trees), 2):
+        #     # Skip if either tree is None
+        #     if tree1 is None or tree2 is None:
+        #         self.logger.debug(f"Skipping pair {i//2} - missing tree")
+        #         continue
+        #         
+        #     pair_idx = i // 2
+        #     if pair_idx >= len(labels):
+        #         self.logger.error(f"Label index {pair_idx} out of range for {len(labels)} labels")
+        #         break
+        #         
+        #     valid_pairs.append((tree1, tree2))
+        #     valid_labels.append(labels[pair_idx])
+
+        # if verbosity == 'debug':
+        #     self.logger.info("\nGenerated tree pairs:")
+        #     # for (tree1, tree2), label in zip(tree_pairs, labels):
+        #     for (tree1, tree2), label in zip(valid_pairs, valid_labels):
+        #         self.logger.info("\n" + "=" * 80)
+        #         self.logger.info(format_tree_pair(tree1, tree2, label))
+        #         self.logger.info("=" * 80)
+
+        # if not valid_pairs:
+        #     raise ValueError("No valid tree pairs produced")
+
+        # self.logger.info(f"Generated {len(valid_pairs)} valid pairs from {len(sentence_pairs)} original pairs")
+        # # Convert and save
+        # # dataset = self._convert_to_gmn_format(tree_pairs, labels)
+        # dataset = self._convert_to_gmn_format(valid_pairs, valid_labels)
+        # with open(output_path, 'w') as f:
+        #     json.dump(dataset, f, indent=4)
+
+        # if verbosity != 'quiet':
+        #     self.logger.info(f"\nDataset saved to {output_path}")
 
     def _convert_to_gmn_format(self, 
                               tree_pairs: List[Tuple[DependencyTree, DependencyTree]], 
