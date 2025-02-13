@@ -68,16 +68,46 @@ class DiaParserTreeParser(BaseTreeParser):
                 self.logger.debug(f"Values: {sentence.values}")
                 raise
         return token_data_group
+        
+    def parse_batch_flat(self, flat_sentences, processed_texts: List[str], processed_tokens: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
+        
+        trees_flat = []
+        valid_token_list_indices = [i for i, tokens in enumerate(processed_tokens) if tokens]
+        valid_token_lists = [tokens for tokens in processed_tokens if tokens]
+
+
+        valid_dataset = self.model.predict(valid_token_lists)
+        valid_token_data = self._process_prediction(valid_dataset)
+
+        token_data_flat = [None]*len(processed_tokens)
+        for i, token_data in zip(valid_token_list_indices, valid_token_data):
+            token_data_flat[i] = token_data
+            
+        for token_data, sentence in zip(token_data_flat, flat_sentences):
+            try:
+                if token_data and sentence:
+                    tree = self._build_tree(token_data, sentence)
+                    if tree:
+                        trees_flat.append(tree)
+                    else:
+                        trees_flat.append(None)
+                else:
+                    trees_flat.append(None)
+            except Exception as e:
+                self.logger.error(f"Error while building tree from diaparser data for: {sentence}: {e}")
+                trees_flat.append(None)
+
+        return trees_flat
     
-    def parse_batch(self, sentence_groups: List[List[str]]) -> List[List[DependencyTree]]:
+    def parse_batch(self, sentence_groups: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
         self.logger.debug(f"Parsing batch of {len(sentence_groups)} sentence groups")
-        tree_groups = [self.parse_single(group) for group in sentence_groups]
+        tree_groups = [self.parse_single(group, num_workers=num_workers) for group in sentence_groups]
         if len(tree_groups) < 1:
             self.logger.warning("No valid trees produced from batch")
             tree_groups = [[None for _ in group] for group in sentence_groups]
         return tree_groups
     
-    def parse_single(self, sentences: List[str]) -> List[DependencyTree]:
+    def parse_single(self, sentences: List[str], num_workers: int = 1) -> List[DependencyTree]:
         """Parse a single sentence group into a dependency tree group"""
         self.logger.debug(f"Parsing group of {len(sentences)} sentences")
         # return self.parse_batch([sentence])[0]
@@ -85,12 +115,13 @@ class DiaParserTreeParser(BaseTreeParser):
         trees = []
         valid_sentences = []
 
-        token_lists = self.parallel_preprocess_tokenize(sentences)
+        token_lists = self.parallel_preprocess_tokenize(sentences, num_workers)
 
         for tokens, sentence in zip(token_lists, sentences):
 
             if not tokens:
-                self.logger.debug(f"\nNo tokens after tokenize in {sentence}, skipping")
+                if sentence != '?' and sentence != '.':
+                    self.logger.debug(f"\nNo tokens after tokenize in {sentence}, skipping")
                 trees.append(None)
                 continue
 

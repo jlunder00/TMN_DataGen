@@ -1,4 +1,5 @@
 # TMN_DataGen/TMN_DataGen/parsers/multi_parser.py
+import time
 from typing import List, Dict, Any, Optional
 from omegaconf import DictConfig
 from .base_parser import BaseTreeParser
@@ -150,26 +151,34 @@ class MultiParser(BaseTreeParser):
 
     def parse_batch(self, sentence_groups: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
         self.logger.debug("Begin processing with multi parser")
-        max_trees = 4  # maximum valid sentences per group
+        max_trees = 10 # maximum valid sentences per group
 
         # --- STEP 1: Flatten input and perform validity checks ---
         flat_sentences = []       # list of all sentences (original strings)
         index_map = []            # list of tuples: (group_index, sentence_index)
+        flatten_time_start = time.time()
         for group_index, group in enumerate(sentence_groups):
             for sentence_index, sentence in enumerate(group):
                 flat_sentences.append(sentence)
                 index_map.append((group_index, sentence_index))
+        flatten_time_end = time.time()
+        self.logger.info(f"flatten time in multiparser took: {flatten_time_end-flatten_time_start} seconds")
 
     
         if not flat_sentences:
             self.logger.warning("No sentences to process")
             return [[None] for _ in sentence_groups]
 
+        tokenize_time = time.time()
         token_lists = self.parallel_preprocess_tokenize(flat_sentences, num_workers=num_workers)
+        self.logger.info(f"tokenize time in multiparser took: {time.time() - tokenize_time}")
 
 
+        validity_time = time.time()
         valid_flags = []          # True if the sentence is valid, False otherwise
         valid_count = {}          # per-group counter for valid sentences
+        processed_texts =[]
+        processed_tokens = []
 
         for group_index, sentence_group in enumerate(sentence_groups):
             valid_count[group_index] = 0
@@ -201,14 +210,19 @@ class MultiParser(BaseTreeParser):
                     valid_count[group_index] += 1
 
             valid_flags.append(is_valid)
+            processed_texts.append(" ".join(tokens) if is_valid else None)
+            processed_tokens.append(tokens if is_valid else None)
+
+        self.logger.info(f"validity time in multiparser took: {time.time() - validity_time} seconds")
 
 
         # --- STEP 2: Process the flat list with each parser ---
         parser_results = {}
         for name, parser in self.parsers.items():
+            parser_time = time.time()
             try:
                 # Each parser now processes the entire flat list at once.
-                results_flat = parser.parse_batch([flat_sentences], num_workers=num_workers)[0]
+                results_flat = parser.parse_batch_flat(flat_sentences, processed_texts, processed_tokens, num_workers=num_workers)
                 processed_results = []
                 # Ensure we keep the same structure: if a sentence was marked invalid,
                 # or if the parser returned a tree that isn’t valid, force it to None.
@@ -222,12 +236,13 @@ class MultiParser(BaseTreeParser):
                 self.logger.error(f"Parser {name} failed: {e}")
                 # If a parser fails, fill its results with None so indexing stays intact.
                 parser_results[name] = [None] * len(flat_sentences)
-
+            self.logger.info(f"parser: {name} took {time.time() - parser_time} seconds in multiparser")
         # --- STEP 3: Combine results using the base parser and reassemble groups ---
         base_parser_name = self.config.parser.feature_sources['tree_structure']
         base_results = parser_results.get(base_parser_name, [None] * len(flat_sentences))
         final_results_flat = [None] * len(flat_sentences)
 
+        enhancement_time = time.time()
         for idx, (group_index, sentence_index) in enumerate(index_map):
             base_tree = base_results[idx]
             # Skip if base parser returned nothing
@@ -246,10 +261,14 @@ class MultiParser(BaseTreeParser):
 
             final_results_flat[idx] = base_tree
 
+        self.logger.info(f"enhancement time in multiparser took: {time.time() - enhancement_time} seconds")
+
+        reassembly_time = time.time()
         # Reassemble the final results back into the original grouping/shape.
         final_groups = [ [None] * len(group) for group in sentence_groups ]
         for idx, (group_index, sentence_index) in enumerate(index_map):
             final_groups[group_index][sentence_index] = final_results_flat[idx]
+        self.logger.info(f"reassembly time in multiparser took: {time.time() - reassembly_time} seconds")
 
         return final_groups
 

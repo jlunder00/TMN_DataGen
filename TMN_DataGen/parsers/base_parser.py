@@ -1,4 +1,5 @@
 # TMN_DataGen/TMN_DataGen/parsers/base_parser.py
+import time
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from ..tree.dependency_tree import DependencyTree
@@ -50,7 +51,7 @@ class BaseTreeParser(ABC):
         if not hasattr(self, 'initialized'):
             self.config = config or {}
             self.verbose = self.config.get('verbose', 'normal') 
-            self.batch_size = self.config.get('batch_size', 32)
+            self.batch_size = self.config.get('parser', {}).get('batch_size', 32)
             
             # Set up logger
             self.logger = logger or setup_logger(
@@ -114,9 +115,10 @@ class BaseTreeParser(ABC):
         
         # Create batches
         for i in range(0, total_sentence_groups, self.batch_size):
+            batch_time_start = time.time()
             batch = sentence_groups[i:min(i + self.batch_size, total_sentence_groups)]
             if show_progress and self.verbose == 'normal' or self.verbose == 'debug':
-                self.logger.info(f"Processing batch {i//self.batch_size + 1}...")
+                self.logger.info(f"Processing batch {i//self.batch_size + 1} with {self.batch_size} group pairs")
             
             batch_trees = self.parse_batch(batch, num_workers)
             
@@ -130,6 +132,8 @@ class BaseTreeParser(ABC):
                     self.logger.debug("="*80)
             
             tree_groups.extend(batch_trees)
+            batch_time_end = time.time()
+            self.logger.info(f"Batch took: {batch_time_end-batch_time_start} seconds")
         
         if show_progress and self.verbose == 'normal' or self.verbose == 'debug':
             self.logger.info("Done!")

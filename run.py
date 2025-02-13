@@ -389,7 +389,7 @@ class BatchProcessor:
         self._save_partition_info()
 
         try:
-            for partition_idx in range(current_partition, len(partition_sizes)):
+            for partition_idx in tqdm(range(current_partition, len(partition_sizes)), desc=f"Processing partitions"):
                 if partition_idx in completed_parts:
                     self.logger.info(f"\nSkipping completed partition {partition_idx}")
                     continue
