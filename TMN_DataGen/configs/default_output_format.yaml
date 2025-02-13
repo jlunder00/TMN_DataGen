@@ -10,8 +10,8 @@ output_format:
   #   max: 2.5
   # Or for similarity:
   # similarity_range: [0, 1]  # Output range for similarity scores
-  type: "contrastive"
-  loss_type: "triplet"  # or "infonce", "supervised"
+  type: "infonce"
+  loss_type: "infonce"  # or "infonce", "supervised"
   multi_sentence_handling:
   strategy: "all_pairs"  # or "filter_by_length", "first_n"
   min_sentence_length: 5  # Minimum tokens per sentence 

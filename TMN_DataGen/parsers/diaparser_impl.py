@@ -85,9 +85,9 @@ class DiaParserTreeParser(BaseTreeParser):
         trees = []
         valid_sentences = []
 
-        for sentence in sentences:
+        token_lists = self.parallel_preprocess_tokenize(sentences)
 
-            tokens = self.preprocess_and_tokenize(sentence)
+        for tokens, sentence in zip(token_lists, sentences):
 
             if not tokens:
                 self.logger.debug(f"\nNo tokens after tokenize in {sentence}, skipping")

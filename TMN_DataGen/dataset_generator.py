@@ -23,10 +23,11 @@ def generate_group_id():
     return str(uuid.uuid4())
 
 class DatasetGenerator:
-    def __init__(self):
+    def __init__(self, num_workers=1):
         """Initialize dataset generator without config - config provided per method call"""
         self.label_map = None
         self.sentence_splitter = SentenceSplitter()
+        self.num_workers = num_workers
 
     def _load_configs(
         self,
@@ -184,7 +185,7 @@ class DatasetGenerator:
             sentence_groups.extend([group1, group2])
 
         # Parse all sentences
-        all_tree_groups = parser.parse_all(sentence_groups, show_progress)
+        all_tree_groups = parser.parse_all(sentence_groups, show_progress, num_workers=self.num_workers)
 
         # Organize trees with groups
         tree_groups = []

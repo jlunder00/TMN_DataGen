@@ -2,7 +2,7 @@
 import json
 import os
 from pathlib import Path
-from typing import List, Dict, Optional, Union, Tuple
+from typing import List, Dict, Optional, Union, Tuple, Callable
 from tqdm import tqdm
 from TMN_DataGen import DatasetGenerator
 import logging
@@ -11,13 +11,39 @@ from multiprocessing import Pool, cpu_count
 import torch.multiprocessing as mp
 from functools import partial
 from dotenv import load_dotenv
+from functools import wraps
 
 load_dotenv()
+
+def preparation_handler(key: str):
+    def decorator(func: Callable):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            return func(self, *args, **kwargs)
+
+        wrapper.preparation_handler = True
+        wrapper.handler_key = key
+        return wrapper
+
+    return decorator
+
+def dataloader_handler(key: str):
+    def decorator(func: Callable):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            return func(self, *args, **kwargs)
+
+        wrapper.dataloader_handler = True
+        wrapper.handler_key = key
+        return wrapper
+
+    return decorator
 
 class BatchProcessor:
     def __init__(self, 
                  input_file: str,
                  output_dir: str,
+                 dataset_type: Optional[str] = "snli",
                  max_lines: Optional[int] = None,
                  batch_size: int = 1000,
                  checkpoint_every: int = 5000,
@@ -26,8 +52,20 @@ class BatchProcessor:
                  preprocessing_config: Optional[Dict] = None,
                  feature_config: Optional[Dict] = None,
                  merge_config: Optional[Dict] = None,
+                 output_config: Optional[Dict] = None,
                  num_partitions: Optional[int] = None,
                  num_workers: Optional[int] = None):
+
+        self._preparation_handlers = {}
+        self._dataloader_handlers = {}
+        for name in dir(self):
+            method = getattr(self, name)
+            if getattr(method, "preparation_handler", False):
+                self._preparation_handlers[method.handler_key] = method
+            if getattr(method, "dataloader_handler", False):
+                self._dataloader_handlers[method.handler_key] = method
+
+        self.dataset_type = dataset_type
         self.input_file = input_file
         self.output_dir = Path(output_dir)
         self.max_lines = max_lines
@@ -38,6 +76,7 @@ class BatchProcessor:
         self.preprocessing_config = preprocessing_config
         self.feature_config = feature_config
         self.merge_config = merge_config
+        self.output_config = output_config
         self.num_partitions = num_partitions
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.num_workers = num_workers or max(1, cpu_count()-4)
@@ -56,7 +95,7 @@ class BatchProcessor:
         self.logger.info(f"Using {self.num_workers} worker processes for parallel operations")
         
         # Load dataset generator
-        self.generator = DatasetGenerator()
+        self.generator = DatasetGenerator(num_workers = self.num_workers)
         
         # Track progress
         self.progress_file = self.output_dir / 'progress.json'
@@ -88,13 +127,28 @@ class BatchProcessor:
 
     def _prepare_batch_data(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
         """Process single item for batch preparation"""
+        return self._preparation_handlers[self.dataset_type](item)
+
+    @preparation_handler('snli')
+    def _prepare_labeled(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
         if item['pairID'] not in self.processed_pairs:
             return (
                 (item['sentence1'], item['sentence2']),
+                item['pairID'],
                 item['gold_label'],
-                item['pairID']
             )
         return None
+
+    @preparation_handler('wiki_qs')
+    def _prepare_wiki_qs(self, item:Dict)-> Optional[Tuple[Tuple[str, str], str, str]]:
+        if item['group_id'] not in self.processed_pairs:
+            return (
+                (item['text1'], item['text2']),
+                item['group_id'],
+                '1'
+            )
+        return None
+
     
     def _save_progress(self):
         """Save current progress"""
@@ -131,7 +185,11 @@ class BatchProcessor:
         """Save partition tracking information"""
         with open(self.partition_info_file, 'w') as f:
             json.dump(self.partition_info, f)
+
+    def _load_data(self) -> List[Dict]:
+        return self._dataloader_handlers[self.dataset_type]()
             
+    @dataloader_handler('snli')
     def _load_snli_data(self) -> List[Dict]:
         """Load SNLI data"""
         self.logger.info(f"Loading data from {self.input_file}")
@@ -146,6 +204,7 @@ class BatchProcessor:
         self.logger.info(f"Loaded {len(data)} sentence pairs")
         return data
 
+    @dataloader_handler('wiki_qs')
     def _load_question_groups(self) -> List[Dict]:
         """Load question group data where each line contains related questions"""
         self.logger.info(f"Loading data from {self.input_file}")
@@ -166,11 +225,12 @@ class BatchProcessor:
                 if len(questions) < 2:
                     continue # Skip groups with < 2 questions
                     
+                rejoined_line = ' '.join(questions)
                 # Create pair by using same text for both sides
                 # All pairs within group are positive examples
                 data.append({
-                    'text1': line.strip(), # Full line for group1
-                    'text2': line.strip(), # Same line for group2
+                    'text1': rejoined_line.strip(), # Full line for group1
+                    'text2': rejoined_line.strip(), # Same line for group2
                     'group_id': f"group_{i}"
                 })
                 
@@ -222,7 +282,7 @@ class BatchProcessor:
         if not results:
             return
 
-        text_pairs, labels, pair_ids = zip(*results) 
+        text_pairs, pair_ids, labels = zip(*results) 
 
         output_path = self.output_dir / f'batch_{batch_idx}.json'
         self.generator.generate_dataset(
@@ -233,7 +293,8 @@ class BatchProcessor:
             parser_config=self.parser_config,
             preprocessing_config=self.preprocessing_config,
             feature_config=self.feature_config,
-            merge_config = self.merge_config
+            output_config=self.output_config,
+            merge_config = self.merge_config,
         )
         
         self.processed_pairs.update(pair_ids)
@@ -259,12 +320,17 @@ class BatchProcessor:
         with Pool(processes=self.num_workers) as pool:
             batch_data = pool.map(self._read_batch_file, batch_files)
 
-        all_graph_pairs = []
-        all_labels = []
+
+        all_groups = []
+        metadata = {k:v for k,v in batch_data[0].items() if k != 'groups'} if len(batch_data) > 0 else {}
+        
+        # all_graph_pairs = []
+        # all_labels = []
 
         for data in tqdm(batch_data, desc=f"Merging batches for partition {partition_num}"):
-            all_graph_pairs.extend(data['graph_pairs'])
-            all_labels.extend(data['labels'])
+            # all_graph_pairs.extend(data['graph_pairs'])
+            # all_labels.extend(data['labels'])
+            all_groups.extend(data['groups'])
         
         # for batch_idx in tqdm(range(start_batch, end_batch), desc=f"Merging batches for partition {partition_num}"):
         #     batch_file = self.output_dir / f'batch_{batch_idx}.json'
@@ -278,8 +344,10 @@ class BatchProcessor:
                 
         # Save partition
         partition_data = {
-            'graph_pairs': all_graph_pairs,
-            'labels': all_labels
+            **metadata,
+            'groups': all_groups
+            # 'graph_pairs': all_graph_pairs,
+            # 'labels': all_labels
         }
         
         partition_file = self.output_dir / f'part_{partition_num}.json'
@@ -295,15 +363,14 @@ class BatchProcessor:
         #     batch_file = self.output_dir / f'batch_{batch_idx}.json'
         #     batch_file.unlink()
             
-        self.logger.info(f"Partition {partition_num} complete with {len(all_graph_pairs)} pairs")
+        self.logger.info(f"Partition {partition_num} complete with {len(all_groups)} pairs")
 
     def process_all(self):
         """Process entire dataset with batching"""
         self.logger.info("\nStarting dataset processing")
         start_time = datetime.now()
         
-            # data = self._load_snli_data()
-        data = self._load_question_groups()
+        data = self._load_data()
         total_batches = (len(data) + self.batch_size - 1) // self.batch_size
         partition_sizes = self._calculate_partition_sizes(total_batches)
         
@@ -438,6 +505,13 @@ if __name__ == '__main__':
                           type=int,
                           default=None,
                           help="Number of worker processes for parallel operations")
+    process_parser.add_argument("-dt", "--dataset_type",
+                                type=str,
+                                required=True,
+                                choices=['snli', 'wiki_qs'],
+                                default="snli",
+                                help="Number of worker processes for parallel operations")
+
 
     
     # Parser for merge mode
@@ -474,6 +548,7 @@ if __name__ == '__main__':
         processor = BatchProcessor(
             input_file=args.input_file,
             output_dir=args.out_dir,
+            dataset_type=args.dataset_type,
             max_lines=args.max_lines,
             batch_size=args.batch_size,
             checkpoint_every=1000,

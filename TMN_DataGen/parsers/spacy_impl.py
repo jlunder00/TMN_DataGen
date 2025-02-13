@@ -13,14 +13,73 @@ class SpacyTreeParser(BaseTreeParser):
             model_name = self.config.get('model_name', 'en_core_web_sm')
             self.model = spacy.load(model_name)
     
-    def parse_batch(self, sentence_groups: List[List[str]]) -> List[List[DependencyTree]]:
-        self.logger.info("Begin Spacy batch processing")
-        tree_groups = [self.parse_single(group) for group in sentence_groups]
+    # def parse_batch(self, sentence_groups: List[List[str]]) -> List[List[DependencyTree]]:
+    #     self.logger.info("Begin Spacy batch processing")
+    #     tree_groups = [self.parse_single(group) for group in sentence_groups]
 
-        if len(tree_groups) < 1:
-            self.logger.warning("No valid trees produced from batch")
-            tree_groups = [[None for sentence in group] for group in sentence_groups]
-        return tree_groups
+    #     if len(tree_groups) < 1:
+    #         self.logger.warning("No valid trees produced from batch")
+    #         tree_groups = [[None for sentence in group] for group in sentence_groups]
+    #     return tree_groups
+
+    def parse_batch(self, sentence_groups: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
+        self.logger.info("Begin Spacy batch processing")
+        
+        # Flatten the input and record the original indices.
+        flat_sentences = []
+        index_map = []  # Each element will be a tuple (group_index, sentence_index)
+        for group_index, group in enumerate(sentence_groups):
+            for sentence_index, sentence in enumerate(group):
+                flat_sentences.append(sentence)
+                index_map.append((group_index, sentence_index))
+        
+        if not flat_sentences:
+            self.logger.warning("No sentences to process in Spacy parser")
+            return [[None for _ in group] for group in sentence_groups]
+
+        token_lists = self.parallel_preprocess_tokenize(flat_sentences, num_workers=num_workers)
+        
+        # Preprocess each sentence.
+        # (You might also want to do your tokenization/validation here as you do in your main parser.)
+        processed_texts =[]
+        for tokens in token_lists:
+            if not tokens:
+                self.logger.warning(f"No tokens after processing: {sentence}")
+                processed_texts.append(None)
+            else:
+                processed_texts.append(" ".join(tokens))
+        
+        # Process only the valid texts using spacy.pipe.
+        # For any sentence that ended up invalid (None), we’ll later fill in a None.
+        docs = [None] * len(processed_texts)
+        valid_texts_with_indices = [(idx, text) for idx, text in enumerate(processed_texts) if text is not None]
+        
+        if valid_texts_with_indices:
+            valid_indices, valid_texts = zip(*valid_texts_with_indices)
+            # spacy.pipe processes an iterable of strings in batch.
+            for idx, doc in zip(valid_indices, self.model.pipe(valid_texts)):
+                docs[idx] = doc
+
+        # Convert each Doc to a DependencyTree.
+        trees_flat = []
+        for orig_sentence, doc in zip(flat_sentences, docs):
+            if doc is None:
+                trees_flat.append(None)
+            else:
+                try:
+                    tree = self._convert_to_tree(orig_sentence, doc)
+                    trees_flat.append(tree)
+                except Exception as e:
+                    self.logger.error(f"Error converting doc to tree for sentence '{orig_sentence}': {e}")
+                    trees_flat.append(None)
+        
+        # Reassemble the trees into the original group structure.
+        final_groups = [[None]*len(group) for group in sentence_groups]
+        for (group_index, sentence_index), tree in zip(index_map, trees_flat):
+            final_groups[group_index][sentence_index] = tree
+        
+        return final_groups
+
 
     def parse_single(self, sentences: List[str]) -> List[DependencyTree]:
         self.logger.info("Begin Spacy single processing")
@@ -36,6 +95,7 @@ class SpacyTreeParser(BaseTreeParser):
                 tokens = self.preprocess_and_tokenize(sentence)
                 if not tokens:
                     self.logger.warning(f"No tokens after processing: {sentence}")
+                    trees.append(None)
                     continue
                 processed_text = ' '.join(tokens)
                 self.logger.debug(f"Preprocessed '{sentence}' to '{processed_text}'")
@@ -57,7 +117,7 @@ class SpacyTreeParser(BaseTreeParser):
         if self.verbose == 'debug':
             for sent, tree in zip(processed_sentences, trees):
                 self.logger.debug(f"\nSpacy processed sentence: {sent}")
-                self.logger.debug(f"Generated Spacy tree with {len(tree.root.get_subtree_nodes())} nodes")
+                self.logger.debug(f"Generated Spacy tree with {len(tree.root.get_subtree_nodes()) if tree is not None else 0} nodes")
                 
         return trees
 

@@ -8,4 +8,4 @@ preprocessing:
   normalize_unicode: true
   remove_numbers: false
   max_token_length: 30
-  min_token_length: 5
+  min_token_length: 0

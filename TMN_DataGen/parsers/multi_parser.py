@@ -29,143 +29,230 @@ class MultiParser(BaseTreeParser):
         
         self.initialized = True
 
-    def parse_batch(self, sentence_groups: List[List[str]]) -> List[List[DependencyTree]]:
+    # def parse_batch(self, sentence_groups: List[List[str]]) -> List[List[DependencyTree]]:
+    #     self.logger.debug("Begin processing with multi parser")
+
+
+    #     parser_results = {}
+
+    #     base_parser = self.config.parser.feature_sources['tree_structure']
+    #     
+    #     max_trees = 4
+    #     final_groups = [[None] for sentences in sentence_groups]
+    #     valid_group_indices = []
+    #     valid_inner_indices = {i:[] for i in range(len(sentence_groups))}
+    #     for i, sentence_group in enumerate(sentence_groups):
+    #         # processed_sentences = []
+    #         token_group = sorted([self.preprocess_and_tokenize(sentence) for sentence in sentence_group], key=lambda x: len(x), reverse=True)
+    #         valid = []
+    #         for j, tokens in enumerate(token_group):
+    #             if not tokens:
+    #                 self.logger.debug(f"Skipping sentence ({i}, {j}) due to no tokens after preprocessing: {sentence_group[j]}")
+    #                 valid.append(None)
+    #                 continue
+    #             if len(tokens) < 3 or len(tokens) > 20:
+    #                 self.logger.debug(f"Skipping sentence ({i}, {j}) due too too many or too few tokens after preprocessing: {sentence_group[j]}")
+    #                 valid.append(None)
+    #                 continue
+    #             if max_trees > 0 and j > max_trees-1:
+    #                 self.logger.debug(f"Skipping sentence ({i}, {j}) due to maximum sentences per group cutoff")
+    #                 valid.append(None)
+    #                 continue
+    #             # processed_text = ' '.join(tokens)
+    #             # processed_sentences.append(processed_text)
+    #             valid.append(j)
+    #             # self.logger.debug(f"Preprocessed '{sentence}' to '{processed_text}'")
+    #         # processed_sentence_groups.append(processed_sentences)
+    #         if len(valid) > 0:
+    #             valid_group_indices.append(i)
+    #         else:
+    #             valid_group_indices.append(None)
+
+    #         valid_inner_indices[i] = valid
+
+
+    #         
+
+    #     if not valid_group_indices:
+    #         self.logger.warning("No valid sentences after preprocessing")
+    #         return final_groups
+
+    #     # Get parses from all enabled parsers
+    #     parser_results = {}
+    #     for name, parser in self.parsers.items():
+    #         try:
+    #             results = parser.parse_batch(sentence_groups)
+    #             # Initialize with None for any skipped sentences
+    #             this_results = [[None] for sentences in sentence_groups]
+    #             for orig_idx_group, orig_idx_group_validity in enumerate(valid_group_indices):
+    #                 if orig_idx_group_validity is None:
+    #                     tree_group = [None]
+    #                 if orig_idx_group < len(results):
+    #                     tree_group = results[orig_idx_group]
+    #                     # Filter by node count
+    #                     for orig_idx, orig_idx_validity in enumerate(valid_inner_indices[orig_idx_group]):
+    #                         if orig_idx_validity is None:
+    #                             tree = None
+    #                         else:
+    #                             tree = None
+    #                             if orig_idx < len(tree_group):
+    #                                 tree = tree_group[orig_idx]
+    #                             if tree is None or (tree is not None and not self._is_valid_tree(tree)):
+    #                                 tree = None 
+    #                         tree_group[orig_idx] = tree
+    #                 else:
+    #                     tree_group = [None]
+    #                 this_results[orig_idx_group] = tree_group
+
+    #             parser_results[name] = this_results
+    #         except Exception as e:
+    #             self.logger.error(f"Parser {name} failed: {e}")
+    #             return final_groups
+    #     # Combine results into final trees
+    #     # combined_trees = []
+    #     base_parser = self.config.parser.feature_sources['tree_structure']
+
+
+    #     for i, final_group_trees in enumerate(final_groups):
+    #         base_parser_result_group = parser_results[base_parser][i]
+    #         new_final_group_trees = []
+    #         for j, base_parser_result in enumerate(base_parser_result_group):
+    #             try:
+    #                 # Skip if base parser didn't produce a tree
+    #                 if base_parser_result is None:
+    #                     continue
+    #                     
+    #                 # Skip if any parser failed for this sentence
+    #                 if any(results[i][j] is None for results in parser_results.values()):
+    #                     continue
+    #                     
+    #                 base_tree = base_parser_result
+    #                 base_tree.config = self.config
+    #                 
+    #                 # Enhance with features from other parsers
+    #                 self._enhance_tree(
+    #                     base_tree,
+    #                     {name: results[i][j] for name, results in parser_results.items()}
+    #                 )
+    #                 if not self._is_valid_contents(base_tree):
+    #                     continue
+    #                 
+    #                 new_final_group_trees.append(base_tree)
+    #                 
+    #             except Exception as e:
+    #                 self.logger.error(f"Failed to combine features for sentence ({i}, {j}), {sentence_groups[i][j]}: {e}")
+    #                 continue
+    #         
+    #         if len(new_final_group_trees) > 0:
+    #             final_groups[i] = new_final_group_trees
+    #     # return combined_trees
+    #     return final_groups
+
+    def parse_batch(self, sentence_groups: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
         self.logger.debug("Begin processing with multi parser")
+        max_trees = 4  # maximum valid sentences per group
+
+        # --- STEP 1: Flatten input and perform validity checks ---
+        flat_sentences = []       # list of all sentences (original strings)
+        index_map = []            # list of tuples: (group_index, sentence_index)
+        for group_index, group in enumerate(sentence_groups):
+            for sentence_index, sentence in enumerate(group):
+                flat_sentences.append(sentence)
+                index_map.append((group_index, sentence_index))
+
+    
+        if not flat_sentences:
+            self.logger.warning("No sentences to process")
+            return [[None] for _ in sentence_groups]
+
+        token_lists = self.parallel_preprocess_tokenize(flat_sentences, num_workers=num_workers)
 
 
-        parser_results = {}
+        valid_flags = []          # True if the sentence is valid, False otherwise
+        valid_count = {}          # per-group counter for valid sentences
 
-        base_parser = self.config.parser.feature_sources['tree_structure']
-        
-        # First get base parser results
-        try:
-            base_results = self.parsers[base_parser].parse_batch(sentence_groups)
-            if not base_results:
-                return []
-        except Exception as e:
-            self.logger.error(f"Base parser {base_parser} failed: {e}")
-            return []
-
-        # Then get results from other parsers
-        for name, parser in self.parsers.items():
-            if name == base_parser:
-                continue
-                
-            try:
-                parser_results[name] = parser.parse_batch(sentence_groups)
-            except Exception as e:
-                self.logger.error(f"Parser {name} failed: {e}")
-                return []
-
-        # First do preprocessing once
-        # processed_sentence_groups = []
-        max_trees = 4
-        final_groups = [[None] for sentences in sentence_groups]
-        valid_group_indices = []
-        valid_inner_indices = {i:[] for i in range(len(sentence_groups))}
-        for i, sentence_group in enumerate(sentence_groups):
-            # processed_sentences = []
-            token_group = sorted([self.preprocess_and_tokenize(sentence) for sentence in sentence_group], key=lambda x: len(x))
-            valid = []
-            for j, tokens in enumerate(token_group):
-                if not tokens:
-                    self.logger.debug(f"Skipping sentence ({i}, {j}) due to no tokens after preprocessing: {sentence}")
-                    valid.append(None)
-                    continue
-                if len(tokens) < 3 or len(tokens) > 20:
-                    self.logger.debug(f"Skipping sentence ({i}, {j}) due too too many or too few tokens after preprocessing: {sentence}")
-                    valid.append(None)
-                    continue
-                if max_trees > 0 and j > max_trees-1:
-                    self.logger.debug(f"Skipping sentence ({i}, {j}) due to maximum sentences per group cutoff")
-                    valid.append(None)
-                    continue
-                # processed_text = ' '.join(tokens)
-                # processed_sentences.append(processed_text)
-                valid.append(j)
-                # self.logger.debug(f"Preprocessed '{sentence}' to '{processed_text}'")
-            # processed_sentence_groups.append(processed_sentences)
-            if len(valid) > 0:
-                valid_group_indices.append(i)
-            else:
-                valid_group_indices.append(None)
-
-            valid_inner_indices[i] = valid
+        for group_index, sentence_group in enumerate(sentence_groups):
+            valid_count[group_index] = 0
 
 
-            
+        for i, tokens in enumerate(token_lists):
+            group_index, sentence_index = index_map[i]
+            is_valid = True
 
-        if not valid_group_indices:
-            self.logger.warning("No valid sentences after preprocessing")
-            return final_groups
+            if not tokens:
+                self.logger.debug(
+                    f"Skipping sentence ({group_index}, {sentence_index}) due to no tokens after preprocessing: {sentence}"
+                )
+                is_valid = False
+            elif len(tokens) < 3 or len(tokens) > 20:
+                self.logger.debug(
+                    f"Skipping sentence ({group_index}, {sentence_index}) due to too few or too many tokens after preprocessing: {sentence}"
+                )
+                is_valid = False
 
-        # Get parses from all enabled parsers
-        parser_results = {}
-        for name, parser in self.parsers.items():
-            try:
-                results = parser.parse_batch(sentence_groups)
-                # Initialize with None for any skipped sentences
-                this_results = [[None] for sentences in sentence_groups]
-                for orig_idx_group in valid_group_indices:
-                    if orig_idx_group is None:
-                        tree_group = [None]
-                    if orig_idx_group < len(results):
-                        tree_group = results[orig_idx_group]
-                        # Filter by node count
-                        for orig_idx in valid_inner_indices[orig_idx_group]:
-                            if orig_idx is None:
-                                tree = None
-                            else:
-                                tree = None
-                                if orig_idx < len(tree_group):
-                                    tree = tree_group[orig_idx]
-                                if tree is None or (tree is not None and not self._is_valid_tree(tree)):
-                                    tree = None 
-                            tree_group[orig_idx] = tree
-                    else:
-                        tree_group = [None]
-                    this_results[orig_idx_group] = tree_group
-
-                parser_results[name] = this_results
-            except Exception as e:
-                self.logger.error(f"Parser {name} failed: {e}")
-                return final_groups
-        # Combine results into final trees
-        # combined_trees = []
-        base_parser = self.config.parser.feature_sources['tree_structure']
-
-
-        for i, final_group_trees in enumerate(final_groups):
-            base_parser_result_group = parser_results[base_parser][i]
-            for j, base_parser_result in enumerate(base_parser_result_group):
-                try:
-                    # Skip if base parser didn't produce a tree
-                    if base_parser_result is None:
-                        continue
-                        
-                    # Skip if any parser failed for this sentence
-                    if any(results[i][j] is None for results in parser_results.values()):
-                        continue
-                        
-                    base_tree = base_parser_result
-                    base_tree.config = self.config
-                    
-                    # Enhance with features from other parsers
-                    self._enhance_tree(
-                        base_tree,
-                        {name: results[i][j] for name, results in parser_results.items()}
+            # Enforce max_trees per group
+            if is_valid and max_trees > 0:
+                if valid_count[group_index] >= max_trees:
+                    self.logger.debug(
+                        f"Skipping sentence ({group_index}, {sentence_index}) due to maximum sentences per group cutoff"
                     )
-                    if not self._is_valid_contents(base_tree):
-                        continue
-                    
-                    final_group_trees[j] = base_tree
-                    
-                except Exception as e:
-                    self.logger.error(f"Failed to combine features for sentence ({i}, {j}), {sentence_groups[i][j]}: {e}")
-                    continue
-            final_groups[i] = final_group_trees
-        # return combined_trees
+                    is_valid = False
+                else:
+                    valid_count[group_index] += 1
+
+            valid_flags.append(is_valid)
+
+
+        # --- STEP 2: Process the flat list with each parser ---
+        parser_results = {}
+        for name, parser in self.parsers.items():
+            try:
+                # Each parser now processes the entire flat list at once.
+                results_flat = parser.parse_batch([flat_sentences], num_workers=num_workers)[0]
+                processed_results = []
+                # Ensure we keep the same structure: if a sentence was marked invalid,
+                # or if the parser returned a tree that isn’t valid, force it to None.
+                for idx, tree in enumerate(results_flat):
+                    if (not valid_flags[idx]) or tree is None or (tree and not self._is_valid_tree(tree)):
+                        processed_results.append(None)
+                    else:
+                        processed_results.append(tree)
+                parser_results[name] = processed_results
+            except Exception as e:
+                self.logger.error(f"Parser {name} failed: {e}")
+                # If a parser fails, fill its results with None so indexing stays intact.
+                parser_results[name] = [None] * len(flat_sentences)
+
+        # --- STEP 3: Combine results using the base parser and reassemble groups ---
+        base_parser_name = self.config.parser.feature_sources['tree_structure']
+        base_results = parser_results.get(base_parser_name, [None] * len(flat_sentences))
+        final_results_flat = [None] * len(flat_sentences)
+
+        for idx, (group_index, sentence_index) in enumerate(index_map):
+            base_tree = base_results[idx]
+            # Skip if base parser returned nothing
+            if base_tree is None:
+                continue
+            # Skip if any parser failed for this sentence
+            if any(parser_results[name][idx] is None for name in self.parsers):
+                continue
+
+            base_tree.config = self.config
+            # Enhance the base tree with features from all parsers
+            features = {name: parser_results[name][idx] for name in self.parsers}
+            self._enhance_tree(base_tree, features)
+            if not self._is_valid_contents(base_tree):
+                continue
+
+            final_results_flat[idx] = base_tree
+
+        # Reassemble the final results back into the original grouping/shape.
+        final_groups = [ [None] * len(group) for group in sentence_groups ]
+        for idx, (group_index, sentence_index) in enumerate(index_map):
+            final_groups[group_index][sentence_index] = final_results_flat[idx]
+
         return final_groups
+
 
     def _is_valid_contents(self, tree):
         for node in tree.root.get_subtree_nodes():
