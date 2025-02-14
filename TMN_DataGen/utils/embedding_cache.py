@@ -45,21 +45,34 @@ class ParallelEmbeddingCache:
 
     def __getitem__(self, word: str) -> Optional[torch.Tensor]:
         """Enable dictionary-like access to cache."""
+        if word == 'file':
+            word = '\\file'
         return self.embedding_cache.get(word)
 
     def __setitem__(self, word: str, embedding: torch.Tensor):
         """Enable dictionary-like setting of cache values."""
-        self.embedding_cache[word] = embedding
-        self._items_in_current_shard += 1
+        if word == 'file':
+            word = '\\file'
+        if word not in self.embedding_cache:
+            self.embedding_cache[word] = embedding
         
+        elif embedding != self.embedding_cache[word]:
+            #replace it such that when you take the list of .items(), its in the new shard
+            del self.embedding_cache[word]
+            self.embedding_cache[word] = embedding
+        else:
+            return
+        self._items_in_current_shard += 1
         # Auto-save shards when they reach the size limit
         if self._items_in_current_shard >= self.shard_size:
-            self._save_current_shard()
-            self._current_shard += 1
+            if self._save_current_shard():
+                self._current_shard += 1
             self._items_in_current_shard = 0
 
     def __contains__(self, word: str) -> bool:
         """Enable 'in' operator for cache."""
+        if word == 'file':
+            word = '\\file'
         return word in self.embedding_cache
 
     def items(self):
@@ -69,7 +82,7 @@ class ParallelEmbeddingCache:
     def _save_current_shard(self):
         """Save the current shard of embeddings."""
         if not self.embedding_cache:
-            return
+            return False
 
         shard_path = self._get_shard_path(self._current_shard)
         items_to_save = list(self.embedding_cache.items())
@@ -80,7 +93,10 @@ class ParallelEmbeddingCache:
         if shard_items:
             # Convert to numpy and save
             np_data = {word: emb.cpu().numpy() for word, emb in shard_items}
+            self.logger.info(f"ok really maybe saving fr: {shard_path}")
             np.savez(shard_path, **np_data)
+            return True
+        return False
 
     @staticmethod
     def _load_shard(shard_path: Path) -> Dict[str, np.ndarray]:
@@ -160,6 +176,7 @@ class ParallelEmbeddingCache:
 
         # Save any remaining items in the current shard
         if self._items_in_current_shard > 0:
+            self.logger.info("maybe saving fr")
             self._save_current_shard()
 
         self.logger.info(f"Saved {len(self.embedding_cache)} embeddings across {self._current_shard + 1} shards")

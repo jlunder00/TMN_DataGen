@@ -1,7 +1,9 @@
 # TMN_DataGen/configs/default_parser_config.yaml
 parser:
   type: multi
-  batch_size: 5000
+  batch_size: 8000
+  diaparser_batch_size: 25000
+  spacy_batch_size: 40000
   parsers:
     diaparser:
       enabled: true

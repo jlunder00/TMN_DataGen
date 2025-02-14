@@ -1,4 +1,5 @@
 #diaparser_impl.py
+import time
 from .base_parser import BaseTreeParser
 from ..tree.node import Node
 from ..tree.dependency_tree import DependencyTree
@@ -75,14 +76,16 @@ class DiaParserTreeParser(BaseTreeParser):
         valid_token_list_indices = [i for i, tokens in enumerate(processed_tokens) if tokens]
         valid_token_lists = [tokens for tokens in processed_tokens if tokens]
 
-
-        valid_dataset = self.model.predict(valid_token_lists)
+        parse_time = time.time()
+        valid_dataset = self.model.predict(valid_token_lists, batch_size=self.diaparser_batch_size)
         valid_token_data = self._process_prediction(valid_dataset)
 
         token_data_flat = [None]*len(processed_tokens)
         for i, token_data in zip(valid_token_list_indices, valid_token_data):
             token_data_flat[i] = token_data
+        self.logger.info(f"parsing in diaparser parser took: {time.time()-parse_time}")
             
+        build_time = time.time()
         for token_data, sentence in zip(token_data_flat, flat_sentences):
             try:
                 if token_data and sentence:
@@ -96,6 +99,7 @@ class DiaParserTreeParser(BaseTreeParser):
             except Exception as e:
                 self.logger.error(f"Error while building tree from diaparser data for: {sentence}: {e}")
                 trees_flat.append(None)
+        self.logger.info(f"tree building in diaparser took: {time.time()-build_time}")
 
         return trees_flat
     

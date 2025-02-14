@@ -1,4 +1,5 @@
 #spacy_impl.py
+import time
 from .base_parser import BaseTreeParser
 from ..tree.node import Node
 from ..tree.dependency_tree import DependencyTree
@@ -57,13 +58,16 @@ class SpacyTreeParser(BaseTreeParser):
         docs = [None] * len(processed_texts)
         valid_texts_with_indices = [(idx, text) for idx, text in enumerate(processed_texts) if text is not None]
         
+        parse_time = time.time()
         if valid_texts_with_indices:
             valid_indices, valid_texts = zip(*valid_texts_with_indices)
             # spacy.pipe processes an iterable of strings in batch.
-            for idx, doc in zip(valid_indices, self.model.pipe(valid_texts)):
+            for idx, doc in zip(valid_indices, self.model.pipe(valid_texts, batch_size=self.spacy_batch_size)):
                 docs[idx] = doc
+        self.logger.info(f"parsing in spacy parser took: {time.time()-parse_time}")
 
         # Convert each Doc to a DependencyTree.
+        convert_time = time.time()
         trees_flat = []
         for orig_sentence, doc in zip(flat_sentences, docs):
             if doc is None:
@@ -75,6 +79,7 @@ class SpacyTreeParser(BaseTreeParser):
                 except Exception as e:
                     self.logger.error(f"Error converting doc to tree for sentence '{orig_sentence}': {e}")
                     trees_flat.append(None)
+        self.logger.info(f"tree building in spacy parser took: {time.time()-convert_time}")
         
         
         return trees_flat

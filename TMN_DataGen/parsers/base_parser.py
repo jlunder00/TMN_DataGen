@@ -52,6 +52,8 @@ class BaseTreeParser(ABC):
             self.config = config or {}
             self.verbose = self.config.get('verbose', 'normal') 
             self.batch_size = self.config.get('parser', {}).get('batch_size', 32)
+            self.spacy_batch_size = self.config.get('parser', {}).get('spacy_batch_size', 10000)
+            self.diaparser_batch_size = self.config.get('parser', {}).get('diaparser_batch_size', 5000)
             
             # Set up logger
             self.logger = logger or setup_logger(
