@@ -39,48 +39,119 @@ def process_group(group: dict, config: ShardConfig) -> dict:
     return processed
 
 def process_and_write_chunk(input_files: List[Path], 
-                          output_path: Path,
-                          start_shard_idx: int,
-                          config: ShardConfig,
-                          metadata: dict) -> int:
-    """Process a chunk of input files and write results directly"""
-    all_groups = []
-    groups_processed = 0
+                              output_path: Path,
+                              start_shard_idx: int,
+                              config: ShardConfig,
+                              metadata: dict) -> int:
+    """
+    Process a chunk of partition files and write results directly.
     
-    # Process each file in the chunk
+    Each input file is a partition file. For each partition file, its groups are split into 
+    shards (chunks of groups with size config.target_shard_size). Each shard file is named 
+    using the original input file's stem with an appended suffix _shard_<global_shard_idx:06d>.json.
+    
+    In addition, for each shard a corresponding counts file is written with the same stem plus 
+    _shard_<global_shard_idx:06d>_counts.json, containing:
+      - 'n_groups': number of groups in the shard.
+      - 'trees_per_group': a list with the number of trees per group.
+    
+    The start_shard_idx is used to maintain shard numbering across chunks. The function returns 
+    the total number of groups processed across all input files.
+    """
+    import json
+    groups_processed = 0
+    current_shard_idx = start_shard_idx
+
+    # Process each partition file individually.
     for file_path in input_files:
         try:
             with open(file_path, 'r') as f:
                 data = json.load(f)
-                groups = [process_group(group, config) for group in data['groups']]
-                all_groups.extend(groups)
-                groups_processed += len(groups)
+            # Process groups from this partition file.
+            groups = [process_group(group, config) for group in data['groups']]
+            groups_processed += len(groups)
         except Exception as e:
             logger.error(f"Error processing file {file_path}: {str(e)}")
             continue
 
-    # Write shards for this chunk
-    current_shard_idx = start_shard_idx
-    for i in range(0, len(all_groups), config.target_shard_size):
-        shard_groups = all_groups[i:i + config.target_shard_size]
-        
-        shard_data = {
-            **metadata,
-            'groups': shard_groups,
-            'shard_info': {
-                'shard_index': current_shard_idx,
-                'groups_in_shard': len(shard_groups),
-                'source_files': [str(f.name) for f in input_files]
+        # Split groups from this partition into shards.
+        for i in range(0, len(groups), config.target_shard_size):
+            shard_groups = groups[i:i + config.target_shard_size]
+            
+            shard_data = {
+                **metadata,
+                'groups': shard_groups,
+                'shard_info': {
+                    'shard_index': current_shard_idx,
+                    'groups_in_shard': len(shard_groups),
+                    'source_file': file_path.name
+                }
             }
-        }
-        
-        output_file = output_path / f'shard_{current_shard_idx:06d}.json'
-        with open(output_file, 'w') as f:
-            json.dump(shard_data, f)
-        
-        current_shard_idx += 1
-    
+            
+            # File naming: keep original partition file's stem and append _shard_<global_shard_idx>.
+            shard_filename = f"{file_path.stem}_shard_{current_shard_idx:06d}.json"
+            output_file = output_path / shard_filename
+            with open(output_file, 'w') as f:
+                json.dump(shard_data, f)
+            
+            # Create the counts file alongside the shard file.
+            counts = {
+                'n_groups': len(shard_groups),
+                'trees_per_group': [len(group.get("trees", [])) for group in shard_groups]
+            }
+            counts_filename = f"{file_path.stem}_shard_{current_shard_idx:06d}_counts.json"
+            counts_file = output_path / counts_filename
+            with open(counts_file, 'w') as f:
+                json.dump(counts, f)
+            
+            current_shard_idx += 1
+
     return groups_processed
+
+
+# def process_and_write_chunk(input_files: List[Path], 
+#                           output_path: Path,
+#                           start_shard_idx: int,
+#                           config: ShardConfig,
+#                           metadata: dict) -> int:
+#     """Process a chunk of input files and write results directly"""
+#     all_groups = []
+#     groups_processed = 0
+#     
+#     # Process each file in the chunk
+#     for file_path in input_files:
+#         try:
+#             with open(file_path, 'r') as f:
+#                 data = json.load(f)
+#                 groups = [process_group(group, config) for group in data['groups']]
+#                 all_groups.extend(groups)
+#                 groups_processed += len(groups)
+#         except Exception as e:
+#             logger.error(f"Error processing file {file_path}: {str(e)}")
+#             continue
+
+#     # Write shards for this chunk
+#     current_shard_idx = start_shard_idx
+#     for i in range(0, len(all_groups), config.target_shard_size):
+#         shard_groups = all_groups[i:i + config.target_shard_size]
+#         
+#         shard_data = {
+#             **metadata,
+#             'groups': shard_groups,
+#             'shard_info': {
+#                 'shard_index': current_shard_idx,
+#                 'groups_in_shard': len(shard_groups),
+#                 'source_files': [str(f.name) for f in input_files]
+#             }
+#         }
+#         
+#         output_file = output_path / f'shard_{current_shard_idx:06d}.json'
+#         with open(output_file, 'w') as f:
+#             json.dump(shard_data, f)
+#         
+#         current_shard_idx += 1
+#     
+#     return groups_processed
 
 def chunk_iterator(items: List, chunk_size: int) -> Iterator[List]:
     """Yield chunks of the input list"""
