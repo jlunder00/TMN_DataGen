@@ -16,7 +16,8 @@ class ParallelEmbeddingCache:
                  cache_dir: Path,
                  shard_size: int = 10000,
                  num_workers: Optional[int] = None,
-                 config: Optional[Dict] = None):
+                 config: Optional[Dict] = None,
+                 device: Optional[str] = 'cuda'):
         """
         Initialize the parallel embedding cache system.
         
@@ -34,6 +35,7 @@ class ParallelEmbeddingCache:
         self._current_shard = 0
         self._items_in_current_shard = 0
         self.config = config or {}
+        self.device = device
         self.logger = setup_logger(
             self.__class__.__name__,
             self.config.get('verbose', 'normal')
@@ -47,7 +49,7 @@ class ParallelEmbeddingCache:
         """Enable dictionary-like access to cache."""
         if word == 'file':
             word = '\\file'
-        return self.embedding_cache.get(word)
+        return self.embedding_cache.get(word).cpu() if self.device == 'cpu' else self.embedding_cache.get(word)
 
     def __setitem__(self, word: str, embedding: torch.Tensor):
         """Enable dictionary-like setting of cache values."""

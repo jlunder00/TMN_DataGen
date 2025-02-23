@@ -171,58 +171,60 @@ class DatasetGenerator:
         for text1, text2 in text_pairs:
             # Split into sentences
             group1 = self.sentence_splitter.split(text1)
-            group2 = self.sentence_splitter.split(text2)
+            # group2 = self.sentence_splitter.split(text2)
             
             # Create group metadata
             group_id = generate_group_id()
             metadata = {
                 'group_id': group_id,
-                'text1': text1,
-                'text2': text2
+                'text': text1,
+                # 'text2': text2
             }
             group_metadata.append(metadata)
             
-            sentence_groups.extend([group1, group2])
+            sentence_groups.extend([group1])
 
         # Parse all sentences
         all_tree_groups = parser.parse_all(sentence_groups, show_progress, num_workers=self.num_workers)
 
         # Organize trees with groups
         tree_groups = []
-        for i in range(0, len(all_tree_groups), 2):
-            if i + 1 >= len(all_tree_groups):
-                continue
+        for i in range(0, len(all_tree_groups)):
+            # if i + 1 >= len(all_tree_groups):
+            #     continue
                 
-            meta = group_metadata[i//2]
+            meta = group_metadata[i]
             group1 = TreeGroup(
                 group_id=meta['group_id'],
-                original_text=meta['text1'],
+                original_text=meta['text'],
                 trees=all_tree_groups[i]
             )
-            group2 = TreeGroup(
-                group_id=meta['group_id'], 
-                original_text=meta['text2'],
-                trees=all_tree_groups[i+1]
-            )
-            tree_groups.append((group1, group2))
+            # group2 = TreeGroup(
+            #     group_id=meta['group_id'], 
+            #     original_text=meta['text2'],
+            #     trees=all_tree_groups[i+1]
+            # )
+            tree_groups.append(group1)
 
         # Convert based on format
         if self.config.output_format.type == "infonce":
             dataset = self._convert_to_infonce_format(tree_groups)
-        else:
-            # Convert tree groups to pairs for backwards compatibility
-            valid_pairs = []
-            valid_labels = []
-            for group1, group2 in tree_groups:
-                for t1 in group1.trees:
-                    for t2 in group2.trees:
-                        if t1 is not None and t2 is not None:
-                            valid_pairs.append((t1, t2))
-                            valid_labels.append(labels[len(valid_pairs)-1])
-            dataset = self._convert_to_gmn_format(valid_pairs, valid_labels)
+            with open(output_path, 'w') as f:
+                json.dump(dataset, f, indent=4)
+        # else:
+        #     # Convert tree groups to pairs for backwards compatibility
+        #     valid_pairs = []
+        #     valid_labels = []
+        #     for group1, group2 in tree_groups:
+        #         for t1 in group1.trees:
+        #             for t2 in group2.trees:
+        #                 if t1 is not None and t2 is not None:
+        #                     valid_pairs.append((t1, t2))
+        #                     valid_labels.append(labels[len(valid_pairs)-1])
+        #     dataset = self._convert_to_gmn_format(valid_pairs, valid_labels)
+        #     with open(output_path, 'w') as f:
+        #         json.dump(dataset, f, indent=4)
 
-        with open(output_path, 'w') as f:
-            json.dump(dataset, f, indent=4)
 
     def _convert_to_infonce_format(
         self,
@@ -231,24 +233,24 @@ class DatasetGenerator:
         """Convert to InfoNCE format with group tracking"""
         groups = []
         
-        for group1, group2 in tree_groups:
+        for group1 in tree_groups:
             # Convert all trees to graph format
             trees1 = [
                 t.to_graph_data() for t in group1.trees 
                 if t is not None
             ]
-            trees2 = [
-                t.to_graph_data() for t in group2.trees
-                if t is not None
-            ]
+            # trees2 = [
+            #     t.to_graph_data() for t in group2.trees
+            #     if t is not None
+            # ]
             
-            if trees1 and trees2:  # Only add if both have valid trees
+            if trees1:  # Only add if both have valid trees
                 group_data = {
                     "group_id": group1.group_id,
-                    "text1": group1.original_text,
-                    "text2": group2.original_text,
-                    "trees1": trees1,
-                    "trees2": trees2
+                    "text": group1.original_text,
+                    # "text2": group2.original_text,
+                    "trees": trees1,
+                    # "trees2": trees2
                 }
                 groups.append(group_data)
 

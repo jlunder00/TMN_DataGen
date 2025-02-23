@@ -9,3 +9,4 @@ preprocessing:
   remove_numbers: false
   max_token_length: 30
   min_token_length: 0
+  question_types: ['open-ended', 'yes/no']

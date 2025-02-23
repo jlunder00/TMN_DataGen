@@ -141,9 +141,22 @@ class BatchProcessor:
 
     @preparation_handler('wiki_qs')
     def _prepare_wiki_qs(self, item:Dict)-> Optional[Tuple[Tuple[str, str], str, str]]:
+        # if item['group_id'] not in self.processed_pairs:
+        #     return (
+        #         (item['text1'], item['text2']),
+        #         item['group_id'],
+        #         '1'
+        #     )
+        # return None
+        return self._prepare_grouped_ds(item)
+    @preparation_handler('amazon_qa')
+    def _prepare_amazon_qa(self, item:Dict):
+        return self._prepare_grouped_ds(item)
+    
+    def _prepare_grouped_ds(self, item:Dict)-> Optional[Tuple[Tuple[str, str], str, str]]:
         if item['group_id'] not in self.processed_pairs:
             return (
-                (item['text1'], item['text2']),
+                (item['text'], ''),
                 item['group_id'],
                 '1'
             )
@@ -235,6 +248,40 @@ class BatchProcessor:
                 })
                 
         self.logger.info(f"Loaded {len(data)} question groups")
+        return data
+
+    @dataloader_handler('amazon_qa')
+    def _load_amazon_qa_data(self) -> List[Dict]:
+        """Load Amazon Q&A data from gzipped files"""
+        import gzip
+        
+        self.logger.info(f"Loading data from {self.input_file}")
+        data = []
+        
+        with gzip.open(self.input_file, 'rt', encoding='utf-8') as f:
+            # Parse line by line since each line is a JSON object
+            for line in f:
+                qa_pair = json.loads(line)
+                
+                # Extract question and combine answers
+                question = qa_pair['question']
+                answers = [a['answerText'] for a in qa_pair['answers']]
+                
+                # Filter by question type if specified
+                if self.preprocessing_config and 'question_types' in self.preprocessing_config:
+                    allowed_types = self.preprocessing_config['question_types']
+                    if qa_pair['questionType'] not in allowed_types:
+                        continue
+                        
+                # Combine all text into one field
+                combined_text = f"{question} {' '.join(answers)}"
+                
+                data.append({
+                    'text': combined_text,
+                    'group_id': f"group_{len(data)}"  # Unique ID for each Q&A group
+                })
+                    
+        self.logger.info(f"Loaded {len(data)} Q&A pairs")
         return data
 
     def _calculate_partition_sizes(self, total_batches: int) -> List[int]:
@@ -508,7 +555,7 @@ if __name__ == '__main__':
     process_parser.add_argument("-dt", "--dataset_type",
                                 type=str,
                                 required=True,
-                                choices=['snli', 'wiki_qs'],
+                                choices=['snli', 'wiki_qs', 'amazon_qa'],
                                 default="snli",
                                 help="Number of worker processes for parallel operations")
 

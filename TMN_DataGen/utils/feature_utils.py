@@ -57,6 +57,7 @@ class FeatureExtractor:
             self.use_gpu = model_cfg.get('use_gpu', True) and torch.cuda.is_available()
             self.cache_embeddings = model_cfg.get('cache_embeddings', True)
             self.embedding_cache_dir = Path(model_cfg.get('embedding_cache_dir', 'embedding_cache'))
+            self.device = torch.device('cuda' if self.use_gpu else 'cpu')
             
             if self.cache_embeddings:
                 self.embedding_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -64,13 +65,13 @@ class FeatureExtractor:
                     cache_dir = self.embedding_cache_dir,
                     shard_size = model_cfg.get("shard_size", 10000),
                     num_workers = model_cfg.get("num_workers", None),
-                    config = model_cfg
+                    config = model_cfg,
+                    device = self.device
                 )
                 # self._load_embedding_cache()
                 self.embedding_cache.load()
 
             self.logger.info("setting device")
-            self.device = torch.device('cuda' if self.use_gpu else 'cpu')
             self.logger.info("device set")
             
             try:
