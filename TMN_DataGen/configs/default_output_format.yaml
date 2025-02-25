@@ -14,6 +14,6 @@ output_format:
   loss_type: "infonce"  # or "infonce", "supervised"
   multi_sentence_handling:
   strategy: "all_pairs"  # or "filter_by_length", "first_n"
-  min_sentence_length: 5  # Minimum tokens per sentence 
+  min_sentence_length: 8  # Minimum tokens per sentence 
   max_sentences: 3        # Max sentences to consider per text
   n_sentences: 2         # For first_n strategy

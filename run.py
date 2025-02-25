@@ -254,27 +254,57 @@ class BatchProcessor:
     def _load_amazon_qa_data(self) -> List[Dict]:
         """Load Amazon Q&A data from gzipped files"""
         import gzip
+        import ast
+        import re
         
         self.logger.info(f"Loading data from {self.input_file}")
         data = []
+        # Define ending punctuation and pattern to check for it
+        end_punct = ['.', '!', '?']
+        has_end_punct = lambda text: any(text.rstrip().endswith(p) for p in end_punct)
         
         with gzip.open(self.input_file, 'rt', encoding='utf-8') as f:
             # Parse line by line since each line is a JSON object
-            for line in f:
-                qa_pair = json.loads(line)
+            for i, line in enumerate(f):
+                if self.max_lines and i >= self.max_lines:
+                    break
+                # qa_pair = json.loads(line)
+                qa_pair = ast.literal_eval(line.strip())
                 
-                # Extract question and combine answers
-                question = qa_pair['question']
-                answers = [a['answerText'] for a in qa_pair['answers']]
+                # Extract question and combine answers 
+                questions = [(q['questionText'], q['questionType'], q['answers']) for q in qa_pair['questions']] if 'questions' in qa_pair.keys() else [(qa_pair['question'], qa_pair['questionType'], None)]
+                final_questions = []
+                final_answers = []
+                for q_text, q_type, answers in questions:
+                    # Filter by question type if specified
+                    if self.preprocessing_config and 'question_types' in self.preprocessing_config:
+                        allowed_types = self.preprocessing_config['question_types']
+                        if q_type not in allowed_types:
+                            continue
+                    if not has_end_punct(q_text):
+                        if '?' in q_text:
+                            q_text = q_text.rstrip()+'?'
+                        else:
+                            q_text = q_text.rstrip()+'.'
+                    final_questions.append(q_text)
+                    if answers is None:
+                        final_answers = [qa_pair.get('answer', '')]
+                    else:
+                        final_answers.extend([a['answerText'] for a in answers])
+                questions = final_questions
+                answers = final_answers
+                # answers = [a['answerText'] for a in qa_pair['answers']] if 'answers' in qa_pair.keys() else [qa_pair.get('answer', '')] 
+                if all([a == '' for a in answers]):
+                    answers = []
                 
-                # Filter by question type if specified
-                if self.preprocessing_config and 'question_types' in self.preprocessing_config:
-                    allowed_types = self.preprocessing_config['question_types']
-                    if qa_pair['questionType'] not in allowed_types:
-                        continue
-                        
+                if not questions or not answers:
+                    continue
+
+
+                answers = [answer if has_end_punct(answer) else answer.rstrip()+'.' for answer in answers]
+
                 # Combine all text into one field
-                combined_text = f"{question} {' '.join(answers)}"
+                combined_text = f"{' '.join(questions)} {' '.join(answers)}"
                 
                 data.append({
                     'text': combined_text,
@@ -489,6 +519,63 @@ class BatchProcessor:
         duration = end_time - start_time
         self.logger.info(f"\nProcessing complete in {duration}")
 
+    def process_directory(self):
+        """Process a single file or all files in a directory"""
+        input_path = Path(self.input_file)
+        if input_path.is_file():
+            self.logger.info(f"Processing single file: {input_path}")
+            self.process_all()
+            return
+            
+        self.logger.info(f"Processing directory: {input_path}")
+        
+        # Determine file pattern based on dataset type
+        if self.dataset_type == 'amazon_qa':
+            file_pattern = '*.json.gz'
+        elif self.dataset_type == 'snli':
+            file_pattern = '*.jsonl'
+        else:
+            file_pattern = '*.*'  # Default to all files
+        
+        # Get all matching files in directory
+        input_files = list(input_path.glob(file_pattern))
+        if not input_files:
+            self.logger.warning(f"No {file_pattern} files found in {input_path}")
+            return
+            
+        self.logger.info(f"Found {len(input_files)} files to process")
+        
+        # Process each file
+        for file_path in input_files:
+            self.logger.info(f"\nProcessing file: {file_path.name}")
+            
+            # Create output subdirectory using stem name (without extension)
+            file_output_dir = self.output_dir / file_path.stem
+            file_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create processor for this file
+            file_processor = BatchProcessor(
+                input_file=str(file_path),
+                output_dir=str(file_output_dir),
+                dataset_type=self.dataset_type,
+                max_lines=self.max_lines,
+                batch_size=self.batch_size,
+                checkpoint_every=self.checkpoint_every,
+                verbosity=self.verbosity,
+                parser_config=self.parser_config,
+                preprocessing_config=self.preprocessing_config, 
+                feature_config=self.feature_config,
+                merge_config=self.merge_config,
+                output_config=self.output_config,
+                num_partitions=self.num_partitions,
+                num_workers=self.num_workers
+            )
+            
+            try:
+                file_processor.process_all()
+            except Exception as e:
+                self.logger.error(f"Error processing {file_path.name}: {e}")
+
 def merge_partition_files(file_paths: List[str], output_path: str):
     """Merge multiple partition files into one"""
     logging.info(f"\nMerging {len(file_paths)} partition files")
@@ -523,10 +610,10 @@ if __name__ == '__main__':
     
     # Parser for processing mode
     process_parser = subparsers.add_parser('process', help='Process SNLI data into graph format')
-    process_parser.add_argument("-if", "--input_file", 
+    process_parser.add_argument("-ip", "--input_path", 
                               type=str, 
                               required=True,
-                              help="Input data path")
+                              help="Input file or directory path")
     process_parser.add_argument("-od", "--out_dir", 
                               type=str, 
                               required=True,
@@ -593,7 +680,7 @@ if __name__ == '__main__':
         }
         
         processor = BatchProcessor(
-            input_file=args.input_file,
+            input_file=args.input_path,
             output_dir=args.out_dir,
             dataset_type=args.dataset_type,
             max_lines=args.max_lines,
@@ -604,7 +691,7 @@ if __name__ == '__main__':
             num_partitions=args.num_partitions,
             num_workers=args.workers
         )
-        processor.process_all()
+        processor.process_directory()
         
     elif args.mode == 'merge':
         merge_partition_files(args.input_files, args.output)
