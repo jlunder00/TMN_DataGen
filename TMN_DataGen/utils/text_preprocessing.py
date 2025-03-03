@@ -77,8 +77,8 @@ class BasePreprocessor:
         """
         abbr_map = {
             "fig.": "figure",
-            "i.e.": "that is,",
-            "e.g.": "for example,",
+            "i.e.": "that is",
+            "e.g.": "for example",
             "etc.": "etc"
         }
         # Create a regex pattern to match any of the abbreviations (case-insensitive)

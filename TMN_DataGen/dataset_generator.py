@@ -17,6 +17,9 @@ class TreeGroup(NamedTuple):
     group_id: str
     original_text: str
     trees: List[DependencyTree]
+    original_text_b: str
+    trees_b : List[DependencyTree]
+    label : str
 
 def generate_group_id():
     """Generate unique ID for groups"""
@@ -164,51 +167,56 @@ class DatasetGenerator:
             self.logger.info(f"\nGenerating dataset...")
             self.logger.info(f"Processing {len(text_pairs)} text pairs")
 
+        is_paired = output_config and output_config.get('paired', False)
+
         # Split sentences and track groups
         sentence_groups = []
         group_metadata = []
         
-        for text1, text2 in text_pairs:
+        for i, (text1, text2) in enumerate(text_pairs):
             # Split into sentences
             group1 = self.sentence_splitter.split(text1)
-            # group2 = self.sentence_splitter.split(text2)
+            if is_paired:
+                group2 = self.sentence_splitter.split(text2)
             
             # Create group metadata
             group_id = generate_group_id()
             metadata = {
                 'group_id': group_id,
                 'text': text1,
-                # 'text2': text2
+                'text_b': text2,
+                'label' : labels[i]
             }
             group_metadata.append(metadata)
             
-            sentence_groups.extend([group1])
+            to_add = [group1]
+            if is_paired:
+                to_add.append(group2)
+            sentence_groups.extend(to_add)
 
         # Parse all sentences
         all_tree_groups = parser.parse_all(sentence_groups, show_progress, num_workers=self.num_workers)
 
         # Organize trees with groups
         tree_groups = []
-        for i in range(0, len(all_tree_groups)):
+        group_idx = 0
+        for i, meta in enumerate(group_metadata):
             # if i + 1 >= len(all_tree_groups):
             #     continue
                 
-            meta = group_metadata[i]
-            group1 = TreeGroup(
+            group = TreeGroup(
                 group_id=meta['group_id'],
                 original_text=meta['text'],
-                trees=all_tree_groups[i]
+                trees=all_tree_groups[i*2],
+                original_text_b= '' if not is_paired else meta['text_b'],
+                trees_b = [] if not is_paired else all_tree_groups[i*2+1],
+                label = meta['label']
             )
-            # group2 = TreeGroup(
-            #     group_id=meta['group_id'], 
-            #     original_text=meta['text2'],
-            #     trees=all_tree_groups[i+1]
-            # )
-            tree_groups.append(group1)
+            tree_groups.append(group)
 
         # Convert based on format
         if self.config.output_format.type == "infonce":
-            dataset = self._convert_to_infonce_format(tree_groups)
+            dataset = self._convert_to_infonce_format(tree_groups, is_paired)
             with open(output_path, 'w') as f:
                 json.dump(dataset, f, indent=4)
         # else:
@@ -228,30 +236,36 @@ class DatasetGenerator:
 
     def _convert_to_infonce_format(
         self,
-        tree_groups: List[Tuple[TreeGroup, TreeGroup]]
+        tree_groups: List[TreeGroup],
+        is_paired=False
     ) -> Dict:
         """Convert to InfoNCE format with group tracking"""
         groups = []
         
-        for group1 in tree_groups:
+        for group in tree_groups:
             # Convert all trees to graph format
             trees1 = [
-                t.to_graph_data() for t in group1.trees 
+                t.to_graph_data() for t in group.trees 
                 if t is not None
             ]
-            # trees2 = [
-            #     t.to_graph_data() for t in group2.trees
-            #     if t is not None
-            # ]
+            if is_paired:
+                trees2 = [
+                    t.to_graph_data() for t in group.trees_b
+                    if t is not None
+                ]
             
-            if trees1:  # Only add if both have valid trees
+            add = (not is_paired and trees1) or (is_paired and trees1 and trees2)
+
+            if add:  # Only add if both have valid trees
                 group_data = {
-                    "group_id": group1.group_id,
-                    "text": group1.original_text,
-                    # "text2": group2.original_text,
+                    "group_id": group.group_id,
+                    "text": group.original_text,
                     "trees": trees1,
-                    # "trees2": trees2
+                    "label": group.label
                 }
+                if is_paired:
+                    group_data['text_b'] = group.original_text_b
+                    group_data['trees_b'] = group.trees_b
                 groups.append(group_data)
 
         return {

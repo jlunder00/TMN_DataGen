@@ -139,6 +139,10 @@ class BatchProcessor:
             )
         return None
 
+    @preparation_handler('patentmatch')
+    def _prepare_patentmatch(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
+        return self._prepare_grouped_ds(item, labeled=True, paired=True) 
+
     @preparation_handler('wiki_qs')
     def _prepare_wiki_qs(self, item:Dict)-> Optional[Tuple[Tuple[str, str], str, str]]:
         # if item['group_id'] not in self.processed_pairs:
@@ -153,12 +157,12 @@ class BatchProcessor:
     def _prepare_amazon_qa(self, item:Dict):
         return self._prepare_grouped_ds(item)
     
-    def _prepare_grouped_ds(self, item:Dict)-> Optional[Tuple[Tuple[str, str], str, str]]:
+    def _prepare_grouped_ds(self, item:Dict, labeled=False, paired=False)-> Optional[Tuple[Tuple[str, str], str, str]]:
         if item['group_id'] not in self.processed_pairs:
             return (
-                (item['text'], ''),
+                (item['text'], '') if not paired else (item['text_a'], item['text_b']),
                 item['group_id'],
-                '1'
+                '1' if not labeled else item['label']
             )
         return None
 
@@ -312,6 +316,47 @@ class BatchProcessor:
                 })
                     
         self.logger.info(f"Loaded {len(data)} Q&A pairs")
+        return data
+
+    @dataloader_handler('patentmatch')
+    def _load_patentmatch_data(self) -> List[Dict]:
+        """Load patent match data from TSV file"""
+        self.logger.info(f"Loading data from {self.input_file}")
+        data = []
+        
+        with open(self.input_file) as f:
+            # Skip header if it exists
+            header = next(f)
+            if not header.strip().startswith('index'):
+                # If first line isn't a header, go back to beginning
+                f.seek(0)
+            
+            for i, line in enumerate(f):
+                if self.max_lines and i >= self.max_lines:
+                    break
+                    
+                # Parse TSV line
+                parts = line.strip().split('\t')
+                if len(parts) < 6:  # Ensure minimum fields
+                    continue
+                    
+                # Extract fields (adjust indices based on your TSV structure)
+                try:
+                    claim_id = parts[1]
+                    text_a = parts[4]
+                    text_b = parts[5]
+                    label = parts[6]
+                    
+                    data.append({
+                        'text_a': text_a,
+                        'text_b': text_b,
+                        'label': label,
+                        'group_id': claim_id
+                    })
+                except IndexError:
+                    self.logger.warning(f"Skipping malformed line: {line[:50]}...")
+                    
+        self.logger.info(f"Loaded {len(data)} patent pairs")
         return data
 
     def _calculate_partition_sizes(self, total_batches: int) -> List[int]:
