@@ -167,7 +167,7 @@ class DatasetGenerator:
             self.logger.info(f"\nGenerating dataset...")
             self.logger.info(f"Processing {len(text_pairs)} text pairs")
 
-        is_paired = output_config and output_config.get('paired', False)
+        is_paired = self.config.output_format and self.config.output_format.get('paired', False)
 
         # Split sentences and track groups
         sentence_groups = []

@@ -687,7 +687,7 @@ if __name__ == '__main__':
     process_parser.add_argument("-dt", "--dataset_type",
                                 type=str,
                                 required=True,
-                                choices=['snli', 'wiki_qs', 'amazon_qa'],
+                                choices=['snli', 'wiki_qs', 'amazon_qa', 'patentmatch'],
                                 default="snli",
                                 help="Number of worker processes for parallel operations")
 
