@@ -55,6 +55,7 @@ class BasePreprocessor:
             # Remove non-ASCII
             text = re.sub(r'[^\x00-\x7F]+', '', text)
             
+        text = self._abbreviation_cleanup(text)
         return text
         
     def _strict_cleanup(self, text: str) -> str:
@@ -66,6 +67,30 @@ class BasePreprocessor:
         if not self.config.preprocessing.preserve_case:
             text = text.lower()
             
+        return text
+
+    def _abbreviation_cleanup(self, text: str) -> str:
+        """
+        Replace common abbreviations with non-porioded equivalents (and proper spacing).
+        This is useful so that sentence tokenization does not mistakenly split on
+        abbreviations like 'fig.', 'i.e.', 'e.g.' or 'etc.'.
+        """
+        abbr_map = {
+            "fig.": "figure",
+            "i.e.": "that is,",
+            "e.g.": "for example,",
+            "etc.": "etc"
+        }
+        # Create a regex pattern to match any of the abbreviations (case-insensitive)
+        pattern = re.compile(r'\b(?:' + '|'.join(re.escape(k) for k in abbr_map.keys()) + r')\b', flags=re.IGNORECASE)
+        
+        def repl(match):
+            token = match.group(0)
+            return abbr_map.get(token.lower(), token)
+        
+        text = pattern.sub(repl, text)
+        # Insert a space if the replaced abbreviation is directly attached to a digit or letter.
+        text = re.sub(r'(?<=[a-zA-Z,])(?=[A-Z0-9])', ' ', text)
         return text
 
 
