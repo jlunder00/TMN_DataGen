@@ -193,7 +193,7 @@ class MultiParser(BaseTreeParser):
                     f"Skipping sentence ({group_index}, {sentence_index}) due to no tokens after preprocessing: {sentence}"
                 )
                 is_valid = False
-            elif len(tokens) < 6 or len(tokens) > 20:
+            elif len(tokens) < 4 or len(tokens) > 100:
                 self.logger.debug(
                     f"Skipping sentence ({group_index}, {sentence_index}) due to too few or too many tokens after preprocessing: {sentence}"
                 )

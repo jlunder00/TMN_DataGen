@@ -343,9 +343,9 @@ class BatchProcessor:
                 # Extract fields (adjust indices based on your TSV structure)
                 try:
                     claim_id = parts[1]
-                    text_a = parts[4]
-                    text_b = parts[5]
-                    label = parts[6]
+                    text_a = parts[5]
+                    text_b = parts[6]
+                    label = parts[7]
                     
                     data.append({
                         'text_a': text_a,

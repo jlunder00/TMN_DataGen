@@ -6,7 +6,7 @@ import json
 from omegaconf import OmegaConf
 from .parsers import DiaParserTreeParser, SpacyTreeParser, MultiParser
 from .tree import DependencyTree
-from .utils.text_preprocessing import SentenceSplitter
+from .utils.text_preprocessing import SentenceSplitter, BasePreprocessor
 from .utils.viz_utils import format_tree_pair
 from .utils.logging_config import setup_logger
 from importlib.resources import files
@@ -168,6 +168,7 @@ class DatasetGenerator:
             self.logger.info(f"Processing {len(text_pairs)} text pairs")
 
         is_paired = self.config.output_format and self.config.output_format.get('paired', False)
+        self.preprocessor = BasePreprocessor(self.config)
 
         # Split sentences and track groups
         sentence_groups = []
@@ -175,16 +176,21 @@ class DatasetGenerator:
         
         for i, (text1, text2) in enumerate(text_pairs):
             # Split into sentences
-            group1 = self.sentence_splitter.split(text1)
+            text2_clean = text2
+            text1_clean = self.preprocessor.preprocess(text1)
+            group1 = self.sentence_splitter.split(text1_clean)
             if is_paired:
-                group2 = self.sentence_splitter.split(text2)
+                text2_clean = self.preprocessor.preprocess(text2)
+                group2 = self.sentence_splitter.split(text2_clean)
             
             # Create group metadata
             group_id = generate_group_id()
             metadata = {
                 'group_id': group_id,
                 'text': text1,
+                'text_clean': text1_clean,
                 'text_b': text2,
+                'text_b_clean': text2_clean,
                 'label' : labels[i]
             }
             group_metadata.append(metadata)
