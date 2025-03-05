@@ -11,6 +11,8 @@ from .utils.viz_utils import format_tree_pair
 from .utils.logging_config import setup_logger
 from importlib.resources import files
 import uuid
+from english_words import get_english_words_set
+from gensim.models import KeyedVectors
 
 class TreeGroup(NamedTuple):
     """Helper class for tracking tree groups"""
@@ -31,6 +33,7 @@ class DatasetGenerator:
         self.label_map = None
         self.sentence_splitter = SentenceSplitter()
         self.num_workers = num_workers
+        self.vocabs = []
 
     def _load_configs(
         self,
@@ -158,8 +161,26 @@ class DatasetGenerator:
         self.config = config
         if self.config.output_format.label_map is not None:
             self.label_map = self.config.output_format.label_map
+
+        if not self.vocabs:
+            vocabs = []
+            vocab_model =  KeyedVectors.load_word2vec_format(self.config.preprocessing.get('vocab_model_path', '/home/jlunder/research/data/word2vec_model/GoogleNews-vectors-negative300.bin'), binary=True, limit=self.config.preprocessing.get('vocab_limit', 500000)) #take only top n common words 
+            vocabs.append(vocab_model.index_to_key)
+            del vocab_model
+            all_words = set()
+            all_words_lower = get_english_words_set(['web2', 'gcide'], lower=True)
+            all_words = all_words.union(all_words_lower)
+            all_words_standard = get_english_words_set(['web2', 'gcide'])
+            all_words = all_words.union(all_words_standard)
+            all_words_alpha_standard = get_english_words_set(['web2', 'gcide'], alpha=True)
+            all_words = all_words.union(all_words_alpha_standard)
+            all_words_alpha_lower = get_english_words_set(['web2', 'gcide'], alpha=True, lower=True)
+            all_words = all_words.union(all_words_alpha_lower)
+            vocabs.append(all_words)
+            self.vocabs = vocabs
+
         # Initialize parser
-        parser = MultiParser(config, pkg_config, self.logger)
+        parser = MultiParser(config, pkg_config, self.vocabs, self.logger)
 
 
         # Process sentence pairs

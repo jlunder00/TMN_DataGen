@@ -9,8 +9,8 @@ from omegaconf import DictConfig
 import numpy as np
 
 class DiaParserTreeParser(BaseTreeParser):
-    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, logger=None):
-        super().__init__(config, pkg_config, logger)
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs=[set({})], logger=None):
+        super().__init__(config, pkg_config, vocabs, logger)
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_ewt.electra-base')
             self.model = Parser.load(model_name)

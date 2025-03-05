@@ -5,13 +5,14 @@ import stanza
 from typing import List
 
 class BaseTokenizer(ABC):
-    def __init__(self, config, vocabs=None):
+    def __init__(self, config, vocabs=None, logger=None):
         """
         Args:
             config: Configuration object.
             vocab (set): A set of valid tokens (typically from your word2vec model).
         """
         self.config = config
+        self.logger = logger
         # Store vocab as a set for quick membership testing.
         self.vocabs = vocabs if vocabs is not None else [set()]
         self.allowed_two_letter = {
@@ -64,7 +65,7 @@ class BaseTokenizer(ABC):
                 if valid_tokens:
                     processed_tokens.extend(valid_tokens)
                 else:
-                    print(f"Dropping token: {token}, not found in vocab and no subtokens could be found in vocab")
+                    self.logger.debug(f"Dropping token: {token}, not found in vocab and no subtokens could be found in vocab")
 
         return processed_tokens
 
@@ -180,8 +181,8 @@ class BaseTokenizer(ABC):
 
 
 class RegexTokenizer(BaseTokenizer):
-    def __init__(self, config, vocab=None):
-        super().__init__(config, vocab)
+    def __init__(self, config, vocab=None, logger=None):
+        super().__init__(config, vocab, logger)
         self.min_len = config.preprocessing.min_token_length
         self.max_len = config.preprocessing.max_token_length
         
@@ -194,13 +195,14 @@ class RegexTokenizer(BaseTokenizer):
         return tokens
 
 class StanzaTokenizer(BaseTokenizer):
-    def __init__(self, config, vocab=None):
-        super().__init__(config, vocab)
+    def __init__(self, config, vocab=None, logger=None):
+        super().__init__(config, vocab, logger)
         try:
             self.nlp = stanza.Pipeline(
                 lang=config.preprocessing.language,
                 processors='tokenize',
-                use_gpu=True
+                use_gpu=True,
+                verbose=False
             )
         except Exception as e:
             raise ValueError(f"Failed to load Stanza: {e}")

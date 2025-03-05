@@ -8,8 +8,8 @@ from typing import List, Any, Optional
 from omegaconf import DictConfig
 
 class SpacyTreeParser(BaseTreeParser):
-    def __init__(self, config: Optional[DictConfig] = None, pkg_config = None, logger = None):
-        super().__init__(config, pkg_config, logger)
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config = None, vocabs = [set({})], logger = None):
+        super().__init__(config, pkg_config, vocabs, logger)
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_core_web_sm')
             self.model = spacy.load(model_name)
@@ -27,32 +27,6 @@ class SpacyTreeParser(BaseTreeParser):
 
     def parse_batch_flat(self, flat_sentences, processed_texts: List[str], processed_tokens: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
         self.logger.info("Begin Spacy batch processing")
-        
-        # Flatten the input and record the original indices.
-        # flat_sentences = []
-        # index_map = []  # Each element will be a tuple (group_index, sentence_index)
-        # for group_index, group in enumerate(sentence_groups):
-        #     for sentence_index, sentence in enumerate(group):
-        #         flat_sentences.append(sentence)
-        #         index_map.append((group_index, sentence_index))
-        
-        # if not flat_sentences:
-        #     self.logger.warning("No sentences to process in Spacy parser")
-        #     return [[None for _ in group] for group in sentence_groups]
-
-        # token_lists = self.parallel_preprocess_tokenize(flat_sentences, num_workers=num_workers)
-        
-        # Preprocess each sentence.
-        # (You might also want to do your tokenization/validation here as you do in your main parser.)
-        # processed_texts =[]
-        # for tokens, sentence in zip(token_lists, flat_sentences):
-        #     if not tokens:
-        #         if sentence != '?' and sentence != '.':
-        #             self.logger.warning(f"No tokens after processing: {sentence}")
-        #         processed_texts.append(None)
-        #     else:
-        #         processed_texts.append(" ".join(tokens))
-        
         # Process only the valid texts using spacy.pipe.
         # For any sentence that ended up invalid (None), we’ll later fill in a None.
         docs = [None] * len(processed_texts)

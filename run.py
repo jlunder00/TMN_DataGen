@@ -130,18 +130,20 @@ class BatchProcessor:
         return self._preparation_handlers[self.dataset_type](item)
 
     @preparation_handler('snli')
-    def _prepare_labeled(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
-        if item['pairID'] not in self.processed_pairs:
-            return (
-                (item['sentence1'], item['sentence2']),
-                item['pairID'],
-                item['gold_label'],
-            )
-        return None
+    def _prepare_snli(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
+        #sample: dict_keys(['annotator_labels', 'captionID', 'gold_label', 'pairID', 'sentence1', 'sentence1_binary_parse', 'sentence1_parse', 'sentence2', 'sentence2_binary_parse', 'sentence2_parse'])
+        return self._prepare_grouped_ds(item, text_key='sentence1', group_key='pairID', text_b_key='sentence2', label_key='gold_label')
+        # if item['pairID'] not in self.processed_pairs:
+        #     return (
+        #         (item['sentence1'], item['sentence2']),
+        #         item['pairID'],
+        #         item['gold_label'],
+        #     )
+        # return None
 
     @preparation_handler('patentmatch')
     def _prepare_patentmatch(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
-        return self._prepare_grouped_ds(item, labeled=True, paired=True) 
+        return self._prepare_grouped_ds(item, text_key='text_a', group_key='group_id', text_b_key='text_b', label_key='label') 
 
     @preparation_handler('wiki_qs')
     def _prepare_wiki_qs(self, item:Dict)-> Optional[Tuple[Tuple[str, str], str, str]]:
@@ -152,17 +154,17 @@ class BatchProcessor:
         #         '1'
         #     )
         # return None
-        return self._prepare_grouped_ds(item)
+        return self._prepare_grouped_ds(item, text_key='text1', group_key='group_id')
     @preparation_handler('amazon_qa')
     def _prepare_amazon_qa(self, item:Dict):
-        return self._prepare_grouped_ds(item)
+        return self._prepare_grouped_ds(item, text_key='text', group_key='group_id')
     
-    def _prepare_grouped_ds(self, item:Dict, labeled=False, paired=False)-> Optional[Tuple[Tuple[str, str], str, str]]:
-        if item['group_id'] not in self.processed_pairs:
+    def _prepare_grouped_ds(self, item:Dict, text_key='text', group_key='group_id', text_b_key = '', label_key = '')-> Optional[Tuple[Tuple[str, str], str, str]]:
+        if item[group_key] not in self.processed_pairs:
             return (
-                (item['text'], '') if not paired else (item['text_a'], item['text_b']),
-                item['group_id'],
-                '1' if not labeled else item['label']
+                (item[text_key], item.get(text_b_key, '')),
+                item[group_key],
+                item.get(label_key, '1')
             )
         return None
 

@@ -8,11 +8,11 @@ from ..utils.logging_config import setup_logger
 from ..utils.text_preprocessing import BasePreprocessor
 from ..utils.tokenizers import RegexTokenizer, StanzaTokenizer
 from omegaconf import DictConfig
-from gensim.models import KeyedVectors
+# from gensim.models import KeyedVectors
 import torch
 from tqdm import tqdm
 from itertools import repeat
-from english_words import get_english_words_set
+# from english_words import get_english_words_set
 
 
 # At the top of your module (or in a dedicated helper module)
@@ -22,7 +22,7 @@ from concurrent.futures import ProcessPoolExecutor
 _worker_preprocessor = None
 _worker_tokenizer = None
 
-def _init_worker(config, vocabs):
+def _init_worker(config, vocabs, logger):
     """Initializer for each worker process.
     This sets up the preprocessor and tokenizer using the given config.
     """
@@ -31,9 +31,9 @@ def _init_worker(config, vocabs):
     from TMN_DataGen.utils.tokenizers import RegexTokenizer, StanzaTokenizer
     _worker_preprocessor = BasePreprocessor(config)
     if config.preprocessing.tokenizer == "stanza":
-        _worker_tokenizer = StanzaTokenizer(config, vocabs)
+        _worker_tokenizer = StanzaTokenizer(config, vocabs, logger)
     else:
-        _worker_tokenizer = RegexTokenizer(config, vocabs)
+        _worker_tokenizer = RegexTokenizer(config, vocabs, logger)
 
 def _parallel_preprocess_tokenize(text: str) -> List[str]:
     """Worker function: preprocess and tokenize a single text."""
@@ -45,13 +45,13 @@ def _parallel_preprocess_tokenize(text: str) -> List[str]:
 class BaseTreeParser(ABC):
     _instances: Dict[str, 'BaseTreeParser'] = {}
     
-    def __new__(cls, config=None, pkg_config=None, logger=None):
+    def __new__(cls, config=None, pkg_config=None, vocabs= [set({})], logger=None):
         if cls not in cls._instances:
             cls._instances[cls.__name__] = super(BaseTreeParser, cls).__new__(cls)
         return cls._instances[cls.__name__]
     
     @abstractmethod
-    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, logger=None):
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs = [set({})], logger=None):
         if not hasattr(self, 'initialized'):
             self.config = config or {}
             self.verbose = self.config.get('verbose', 'normal') 
@@ -64,29 +64,30 @@ class BaseTreeParser(ABC):
                     self.__class__.__name__,
                     self.config.get('verbose', 'normal')
                     )
-            self.vocabs = []
+            # self.vocabs = []
 
-            vocab_model =  KeyedVectors.load_word2vec_format(self.config.preprocessing.get('vocab_model_path', '/home/jlunder/research/data/word2vec_model/GoogleNews-vectors-negative300.bin'), binary=True, limit=self.config.preprocessing.get('vocab_limit', 500000)) #take only top n common words 
-            self.vocabs.append(vocab_model.index_to_key)
+            # vocab_model =  KeyedVectors.load_word2vec_format(self.config.preprocessing.get('vocab_model_path', '/home/jlunder/research/data/word2vec_model/GoogleNews-vectors-negative300.bin'), binary=True, limit=self.config.preprocessing.get('vocab_limit', 500000)) #take only top n common words 
+            # self.vocabs.append(vocab_model.index_to_key)
 
-            all_words = set()
-            all_words_lower = get_english_words_set(['web2', 'gcide'], lower=True)
-            all_words = all_words.union(all_words_lower)
-            all_words_standard = get_english_words_set(['web2', 'gcide'])
-            all_words = all_words.union(all_words_standard)
-            all_words_alpha_standard = get_english_words_set(['web2', 'gcide'], alpha=True)
-            all_words = all_words.union(all_words_alpha_standard)
-            all_words_alpha_lower = get_english_words_set(['web2', 'gcide'], alpha=True, lower=True)
-            all_words = all_words.union(all_words_alpha_lower)
-            self.vocabs.append(all_words)
+            # all_words = set()
+            # all_words_lower = get_english_words_set(['web2', 'gcide'], lower=True)
+            # all_words = all_words.union(all_words_lower)
+            # all_words_standard = get_english_words_set(['web2', 'gcide'])
+            # all_words = all_words.union(all_words_standard)
+            # all_words_alpha_standard = get_english_words_set(['web2', 'gcide'], alpha=True)
+            # all_words = all_words.union(all_words_alpha_standard)
+            # all_words_alpha_lower = get_english_words_set(['web2', 'gcide'], alpha=True, lower=True)
+            # all_words = all_words.union(all_words_alpha_lower)
+            # self.vocabs.append(all_words)
+            self.vocabs = vocabs
 
             self.preprocessor = BasePreprocessor(self.config)
 
             # Initialize Tokenizer
             if self.config.preprocessing.tokenizer == "stanza":
-                self.tokenizer = StanzaTokenizer(self.config, self.vocabs)
+                self.tokenizer = StanzaTokenizer(self.config, self.vocabs, self.logger)
             else:
-                self.tokenizer = RegexTokenizer(self.config, self.vocabs)
+                self.tokenizer = RegexTokenizer(self.config, self.vocabs, self.logger)
 
             
             self.initialized = True
@@ -123,7 +124,7 @@ class BaseTreeParser(ABC):
         if num_workers < 2 or self.config.preprocessing.tokenizer == "stanza":
             token_lists = [self.preprocess_and_tokenize(text) for text in texts]
         else:
-            with ProcessPoolExecutor(max_workers=num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs)) as executor:
+            with ProcessPoolExecutor(max_workers=num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs, self.logger)) as executor:
                 token_lists = list(executor.map(_parallel_preprocess_tokenize, texts))
         return token_lists
     
