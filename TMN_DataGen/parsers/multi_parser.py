@@ -193,7 +193,7 @@ class MultiParser(BaseTreeParser):
                     f"Skipping sentence ({group_index}, {sentence_index}) due to no tokens after preprocessing: {sentence}"
                 )
                 is_valid = False
-            elif len(tokens) < 4 or len(tokens) > 100:
+            elif len(tokens) < 4 or len(tokens) > 325:
                 self.logger.debug(
                     f"Skipping sentence ({group_index}, {sentence_index}) due to too few or too many tokens after preprocessing: {sentence}"
                 )
@@ -292,8 +292,8 @@ class MultiParser(BaseTreeParser):
         for node in tree.root.get_subtree_nodes():
             # Check node count
             node_count = len(tree.root.get_subtree_nodes())
-            if node_count < 3 or node_count > 15:
-                self.logger.debug(f"Tree has {node_count} nodes - outside valid range [3,15]")
+            if node_count < 3 or node_count > 325:
+                self.logger.debug(f"Tree has {node_count} nodes - outside valid range [3,325]")
                 return False
                 
         return True

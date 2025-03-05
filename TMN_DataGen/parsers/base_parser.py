@@ -8,8 +8,12 @@ from ..utils.logging_config import setup_logger
 from ..utils.text_preprocessing import BasePreprocessor
 from ..utils.tokenizers import RegexTokenizer, StanzaTokenizer
 from omegaconf import DictConfig
+from gensim.models import KeyedVectors
 import torch
 from tqdm import tqdm
+from itertools import repeat
+from english_words import get_english_words_set
+
 
 # At the top of your module (or in a dedicated helper module)
 from concurrent.futures import ProcessPoolExecutor
@@ -18,7 +22,7 @@ from concurrent.futures import ProcessPoolExecutor
 _worker_preprocessor = None
 _worker_tokenizer = None
 
-def _init_worker(config):
+def _init_worker(config, vocabs):
     """Initializer for each worker process.
     This sets up the preprocessor and tokenizer using the given config.
     """
@@ -27,15 +31,15 @@ def _init_worker(config):
     from TMN_DataGen.utils.tokenizers import RegexTokenizer, StanzaTokenizer
     _worker_preprocessor = BasePreprocessor(config)
     if config.preprocessing.tokenizer == "stanza":
-        _worker_tokenizer = StanzaTokenizer(config)
+        _worker_tokenizer = StanzaTokenizer(config, vocabs)
     else:
-        _worker_tokenizer = RegexTokenizer(config)
+        _worker_tokenizer = RegexTokenizer(config, vocabs)
 
 def _parallel_preprocess_tokenize(text: str) -> List[str]:
     """Worker function: preprocess and tokenize a single text."""
     global _worker_preprocessor, _worker_tokenizer
     clean_text = _worker_preprocessor.preprocess(text)
-    tokens = _worker_tokenizer.tokenize(clean_text)
+    tokens = _worker_tokenizer.tokenize_with_vocab(clean_text)
     return tokens
 
 class BaseTreeParser(ABC):
@@ -60,14 +64,30 @@ class BaseTreeParser(ABC):
                     self.__class__.__name__,
                     self.config.get('verbose', 'normal')
                     )
+            self.vocabs = []
+
+            vocab_model =  KeyedVectors.load_word2vec_format(self.config.preprocessing.get('vocab_model_path', '/home/jlunder/research/data/word2vec_model/GoogleNews-vectors-negative300.bin'), binary=True, limit=self.config.preprocessing.get('vocab_limit', 500000)) #take only top n common words 
+            self.vocabs.append(vocab_model.index_to_key)
+
+            all_words = set()
+            all_words_lower = get_english_words_set(['web2', 'gcide'], lower=True)
+            all_words = all_words.union(all_words_lower)
+            all_words_standard = get_english_words_set(['web2', 'gcide'])
+            all_words = all_words.union(all_words_standard)
+            all_words_alpha_standard = get_english_words_set(['web2', 'gcide'], alpha=True)
+            all_words = all_words.union(all_words_alpha_standard)
+            all_words_alpha_lower = get_english_words_set(['web2', 'gcide'], alpha=True, lower=True)
+            all_words = all_words.union(all_words_alpha_lower)
+            self.vocabs.append(all_words)
 
             self.preprocessor = BasePreprocessor(self.config)
 
             # Initialize Tokenizer
             if self.config.preprocessing.tokenizer == "stanza":
-                self.tokenizer = StanzaTokenizer(self.config)
+                self.tokenizer = StanzaTokenizer(self.config, self.vocabs)
             else:
-                self.tokenizer = RegexTokenizer(self.config)
+                self.tokenizer = RegexTokenizer(self.config, self.vocabs)
+
             
             self.initialized = True
     
@@ -84,7 +104,7 @@ class BaseTreeParser(ABC):
     def preprocess_and_tokenize(self, text: str) -> List[str]:
         """Preprocess text and tokenize into words"""
         clean_text = self.preprocessor.preprocess(text)
-        tokens = self.tokenizer.tokenize(clean_text)
+        tokens = self.tokenizer.tokenize_with_vocab(clean_text)
         return tokens
 
     def parallel_preprocess_tokenize(self, texts: List[str], num_workers: int = None) -> List[List[str]]:
@@ -100,8 +120,11 @@ class BaseTreeParser(ABC):
             List[List[str]]: A list where each element is the list of tokens for the corresponding text.
         """
         self.logger.info("Parallel preprocessing/tokenization of {} texts".format(len(texts)))
-        with ProcessPoolExecutor(max_workers=num_workers, initializer=_init_worker, initargs=(self.config,)) as executor:
-            token_lists = list(executor.map(_parallel_preprocess_tokenize, texts))
+        if num_workers < 2 or self.config.preprocessing.tokenizer == "stanza":
+            token_lists = [self.preprocess_and_tokenize(text) for text in texts]
+        else:
+            with ProcessPoolExecutor(max_workers=num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs)) as executor:
+                token_lists = list(executor.map(_parallel_preprocess_tokenize, texts))
         return token_lists
     
     def parse_all(self, sentence_groups: List[List[str]], show_progress: bool = True, num_workers: int = 1) -> List[List[DependencyTree]]:

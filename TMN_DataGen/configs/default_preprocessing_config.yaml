@@ -1,7 +1,7 @@
 # TMN_DataGen/configs/default_preprocessing_config.yaml  
 preprocessing:
   strictness_level: 2
-  tokenizer: regex
+  tokenizer: stanza
   language: en
   preserve_case: false
   remove_punctuation: true
@@ -10,3 +10,5 @@ preprocessing:
   max_token_length: 30
   min_token_length: 0
   question_types: ['open-ended', 'yes/no']
+  vocab_model_path: /home/jlunder/research/data/word2vec_model/GoogleNews-vectors-negative300.bin
+  vocab_limit : 500000

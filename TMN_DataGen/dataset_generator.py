@@ -271,7 +271,7 @@ class DatasetGenerator:
                 }
                 if is_paired:
                     group_data['text_b'] = group.original_text_b
-                    group_data['trees_b'] = group.trees_b
+                    group_data['trees_b'] = trees2
                 groups.append(group_data)
 
         return {
