@@ -141,6 +141,10 @@ class BatchProcessor:
         #     )
         # return None
 
+    @preparation_handler('semeval')
+    def _prepare_semeval(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
+        return self._prepare_grouped_ds(item, text_key='sentence1', group_key='pairID', text_b_key='sentence2', label_key='gold_label')
+
     @preparation_handler('patentmatch')
     def _prepare_patentmatch(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
         return self._prepare_grouped_ds(item, text_key='text_a', group_key='group_id', text_b_key='text_b', label_key='label') 
@@ -221,6 +225,19 @@ class BatchProcessor:
                 data.append(json.loads(line))
             # data = [json.loads(line) for line in f]
         self.logger.info(f"Loaded {len(data)} sentence pairs")
+        return data
+
+    @dataloader_handler('semeval')
+    def _load_semeval_data(self) -> List[Dict]:
+        self.logger.info(f"Loading data from {self.input_file}")
+        data = []
+        with open(self.input_file) as f:
+            next(f)
+            for i, line in enumerate(f):
+                if self.max_lines and i >= self.max_lines:
+                    break
+                data.append(json.loads(line))
+        self.logger.info(f"Loaded data from {self.input_file}")
         return data
 
     @dataloader_handler('wiki_qs')
@@ -689,7 +706,7 @@ if __name__ == '__main__':
     process_parser.add_argument("-dt", "--dataset_type",
                                 type=str,
                                 required=True,
-                                choices=['snli', 'wiki_qs', 'amazon_qa', 'patentmatch'],
+                                choices=['snli', 'wiki_qs', 'amazon_qa', 'patentmatch', 'semeval'],
                                 default="snli",
                                 help="Number of worker processes for parallel operations")
 
