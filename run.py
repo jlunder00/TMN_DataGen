@@ -61,6 +61,7 @@ class BatchProcessor:
                  num_partitions: Optional[int] = None,
                  num_workers: Optional[int] = None):
 
+        # Dispatcher dictionaries!
         self._preparation_handlers = {}
         self._dataloader_handlers = {}
         for name in dir(self):
@@ -136,15 +137,7 @@ class BatchProcessor:
 
     @preparation_handler('snli')
     def _prepare_snli(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
-        #sample: dict_keys(['annotator_labels', 'captionID', 'gold_label', 'pairID', 'sentence1', 'sentence1_binary_parse', 'sentence1_parse', 'sentence2', 'sentence2_binary_parse', 'sentence2_parse'])
         return self._prepare_grouped_ds(item, text_key='sentence1', group_key='pairID', text_b_key='sentence2', label_key='gold_label')
-        # if item['pairID'] not in self.processed_pairs:
-        #     return (
-        #         (item['sentence1'], item['sentence2']),
-        #         item['pairID'],
-        #         item['gold_label'],
-        #     )
-        # return None
 
     @preparation_handler('semeval')
     def _prepare_semeval(self, item: Dict) -> Optional[Tuple[Tuple[str, str], str, str]]:
@@ -156,14 +149,8 @@ class BatchProcessor:
 
     @preparation_handler('wiki_qs')
     def _prepare_wiki_qs(self, item:Dict)-> Optional[Tuple[Tuple[str, str], str, str]]:
-        # if item['group_id'] not in self.processed_pairs:
-        #     return (
-        #         (item['text1'], item['text2']),
-        #         item['group_id'],
-        #         '1'
-        #     )
-        # return None
         return self._prepare_grouped_ds(item, text_key='text1', group_key='group_id')
+
     @preparation_handler('amazon_qa')
     def _prepare_amazon_qa(self, item:Dict):
         return self._prepare_grouped_ds(item, text_key='text', group_key='group_id')
@@ -407,21 +394,6 @@ class BatchProcessor:
         if batch_idx <= self.last_batch_idx:
             return
 
-        # sentence_pairs = []
-        # labels = []
-        # pair_ids = []
-        # 
-        # for item in batch_data:
-        #     if item['pairID'] not in self.processed_pairs:
-        #         sentence_pairs.append(
-        #             (item['sentence1'], item['sentence2'])
-        #         )
-        #         labels.append(item['gold_label'])
-        #         pair_ids.append(item['pairID'])
-        # 
-        # if not sentence_pairs:
-        #     return
-
         with Pool(processes=self.num_workers) as pool:
             results = list(filter(None, pool.map(self._prepare_batch_data, batch_data)))
 
@@ -470,24 +442,10 @@ class BatchProcessor:
         all_groups = []
         metadata = {k:v for k,v in batch_data[0].items() if k != 'groups'} if len(batch_data) > 0 else {}
         
-        # all_graph_pairs = []
-        # all_labels = []
 
         for data in tqdm(batch_data, desc=f"Merging batches for partition {partition_num}"):
-            # all_graph_pairs.extend(data['graph_pairs'])
-            # all_labels.extend(data['labels'])
             all_groups.extend(data['groups'])
         
-        # for batch_idx in tqdm(range(start_batch, end_batch), desc=f"Merging batches for partition {partition_num}"):
-        #     batch_file = self.output_dir / f'batch_{batch_idx}.json'
-        #     if not batch_file.exists():
-        #         raise ValueError(f"Missing batch file: {batch_file}")
-        #         
-        #     with open(batch_file) as f:
-        #         data = json.load(f)
-        #         all_graph_pairs.extend(data['graph_pairs'])
-        #         all_labels.extend(data['labels'])
-                
         # Save partition
         partition_data = {
             **metadata,
@@ -505,9 +463,6 @@ class BatchProcessor:
         self.logger.info("Cleaning up batch files...")
         with Pool(processes=self.num_workers) as pool:
             pool.map(Path.unlink, batch_files)
-        # for batch_idx in range(start_batch, end_batch):
-        #     batch_file = self.output_dir / f'batch_{batch_idx}.json'
-        #     batch_file.unlink()
             
         self.logger.info(f"Partition {partition_num} complete with {len(all_groups)} pairs")
 
