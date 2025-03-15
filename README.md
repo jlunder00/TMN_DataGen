@@ -12,6 +12,8 @@ This section provides specific instructions for setting up TMN_DataGen for use w
 
 The embedding cache is required for all usage scenarios. Here's how to create it:
 
+1. **[Follow package setup instructions here](#required-dependencies)**
+
 1. **Generate a small dataset**: Processing even a small dataset will create the necessary embedding cache structure.
 
 ```bash
