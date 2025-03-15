@@ -6,7 +6,8 @@ A tool for generating and processing dependency trees for training Graph Matchin
 
 ## CSCD584 Submission Instructions
 
-This section provides specific instructions for setting up TMN_DataGen for use with the Tree-Matching-Networks package in the CSCD584 submission.
+This section provides specific instructions for setting up TMN_DataGen for use with the Tree-Matching-Networks package in the CSCD584 submission.    
+Note: this has not been tested in other environments. It is possible there are issues preventing it from working in environments other than my own.
 
 ### Creating Embedding Cache for Demo or Evaluation
 
