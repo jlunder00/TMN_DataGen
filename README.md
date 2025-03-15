@@ -1,4 +1,4 @@
-[//] # (Authored by: Jason Lunder EWUID: 01032294)
+[//]: # (Authored by: Jason Lunder EWUID: 01032294)
 
 # TMN_DataGen
 
