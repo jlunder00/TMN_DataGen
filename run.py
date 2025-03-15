@@ -1,3 +1,8 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
+#Main driver script for TMN_DataGen. Instantiates and runs preprocessing/tree parsing with single threaded and multiprocessing options.
+#TODO: absorb this functionality into the TMN_DataGen internal package structure by creating a file for the BatchProcessor class and a set of driver functions for a user to use
+
 # run.py
 import json
 import os

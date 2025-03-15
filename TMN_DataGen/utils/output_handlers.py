@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 # TMN_DataGen/utils/output_handlers.py
 from enum import Enum
 from abc import ABC, abstractmethod

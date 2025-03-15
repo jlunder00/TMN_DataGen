@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 # TMN_DataGen/TMN_DataGen/parsers/base_parser.py
 import time
 from abc import ABC, abstractmethod

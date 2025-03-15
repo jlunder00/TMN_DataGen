@@ -1,3 +1,6 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+#post processing script for fixing some of the issues with the wikiqs dataset after processing - may be defunct with new updates, which havent been tested against wikiqs dataset
+
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Iterator
@@ -107,51 +110,6 @@ def process_and_write_chunk(input_files: List[Path],
             current_shard_idx += 1
 
     return groups_processed
-
-
-# def process_and_write_chunk(input_files: List[Path], 
-#                           output_path: Path,
-#                           start_shard_idx: int,
-#                           config: ShardConfig,
-#                           metadata: dict) -> int:
-#     """Process a chunk of input files and write results directly"""
-#     all_groups = []
-#     groups_processed = 0
-#     
-#     # Process each file in the chunk
-#     for file_path in input_files:
-#         try:
-#             with open(file_path, 'r') as f:
-#                 data = json.load(f)
-#                 groups = [process_group(group, config) for group in data['groups']]
-#                 all_groups.extend(groups)
-#                 groups_processed += len(groups)
-#         except Exception as e:
-#             logger.error(f"Error processing file {file_path}: {str(e)}")
-#             continue
-
-#     # Write shards for this chunk
-#     current_shard_idx = start_shard_idx
-#     for i in range(0, len(all_groups), config.target_shard_size):
-#         shard_groups = all_groups[i:i + config.target_shard_size]
-#         
-#         shard_data = {
-#             **metadata,
-#             'groups': shard_groups,
-#             'shard_info': {
-#                 'shard_index': current_shard_idx,
-#                 'groups_in_shard': len(shard_groups),
-#                 'source_files': [str(f.name) for f in input_files]
-#             }
-#         }
-#         
-#         output_file = output_path / f'shard_{current_shard_idx:06d}.json'
-#         with open(output_file, 'w') as f:
-#             json.dump(shard_data, f)
-#         
-#         current_shard_idx += 1
-#     
-#     return groups_processed
 
 def chunk_iterator(items: List, chunk_size: int) -> Iterator[List]:
     """Yield chunks of the input list"""

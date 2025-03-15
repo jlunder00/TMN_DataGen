@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 #TMN_DataGen/tree/dependency_tree.py
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np

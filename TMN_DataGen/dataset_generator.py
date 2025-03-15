@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 # TMN_DataGen/TMN_DataGen/dataset_generator.py
 from typing import List, Tuple, Optional, Dict, Union, NamedTuple
 from pathlib import Path
