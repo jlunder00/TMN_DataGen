@@ -42,7 +42,7 @@ def process_group(group: dict, config: ShardConfig) -> Optional[dict]:
     Returns None if the group should be skipped (e.g., not enough trees)
     """
     # Skip groups with too few trees
-    if len(group.get("trees", [])) < config.min_trees_per_group:
+    if len(group.get("trees", [])) + len(group.get("trees_b", [])) < config.min_trees_per_group:
         return None
         
     processed = {k: v for k, v in group.items() 
@@ -54,7 +54,7 @@ def process_group(group: dict, config: ShardConfig) -> Optional[dict]:
             
     return processed
 
-def process_partition_file(file_path: Path, output_base: Path, config: ShardConfig, dir_suffix: str, category_name: str):
+def process_partition_file(file_path: Path, output_base: Path, config: ShardConfig, dir_suffix: str, category_name: str = None):
     """
     Process a single partition file:
     1. Load and filter groups
@@ -133,6 +133,8 @@ def process_partition_file(file_path: Path, output_base: Path, config: ShardConf
                     'n_groups': len(shard_groups),
                     'trees_per_group': [len(group.get("trees", [])) for group in shard_groups]
                 }
+                if 'trees_b' in shard_groups[0]:
+                    counts['trees_b_per_group'] = [len(group.get('trees_b', [])) for group in shard_groups]
                 counts_filename = f"{file_stem}_shard_{shard_idx:06d}_counts.json"
                 counts_file = output_dir / counts_filename
                 with open(counts_file, 'w') as f:
@@ -172,15 +174,18 @@ def process_category_directory(category_dir: Path, output_base: Path, config: Sh
     logger.info(f"Processed {total_groups} valid groups from {category_name}")
     return total_groups
 
-def process_input_directory(input_dir: Path, output_base: Path, config: ShardConfig, dir_suffix: str):
+def process_input_directory(input_dir: Path, output_base: Path, config: ShardConfig, dir_suffix: str, nested: bool = False):
     """Process a single input directory with its subdirectories using multiprocessing"""
     
-    # Find all subdirectories (category directories)
-    category_dirs = [d for d in input_dir.iterdir() if d.is_dir()]
-    
-    if not category_dirs:
-        logger.warning(f"No subdirectories found in {input_dir}")
-        return
+    if nested:
+        # Find all subdirectories (category directories)
+        category_dirs = [d for d in input_dir.iterdir() if d.is_dir()]
+        
+        if not category_dirs:
+            logger.warning(f"No subdirectories found in {input_dir}")
+            return
+    else:
+        category_dirs = [input_dir]
     
     logger.info(f"Found {len(category_dirs)} category directories in {input_dir}")
     
