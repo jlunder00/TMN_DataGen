@@ -23,6 +23,9 @@ python -m TMN_DataGen.run process \
   --input_path data/snli_1.0/snli_1.0_test.jsonl \
   --out_dir processed_data/test \
   --dataset_type snli \
+  --num_workers 4 \
+  --num_partitions 10  # number of partitions
+  --batch_size 10
   --spacy_model en_core_web_sm \
   --max_lines 100  # Process only 100 lines
 ```
