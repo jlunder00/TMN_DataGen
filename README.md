@@ -7,7 +7,7 @@ A tool for generating and processing dependency trees for training Graph Matchin
 ## CSCD584 Submission Instructions
 
 This section provides specific instructions for setting up TMN_DataGen for use with the Tree-Matching-Networks package in the CSCD584 submission.    
-Note: this has not been tested in other environments. It is possible there are issues preventing it from working in environments other than my own.
+Note: this has not been tested in other environments. It is possible there are issues preventing it from working in environments other than my own.    
 
 ### Creating Embedding Cache for Demo or Evaluation
 
@@ -73,8 +73,10 @@ Install from source:
 ```bash
 git clone https://github.com/jlunder00/TMN_DataGen.git
 cd TMN_DataGen
-pip install .
+pip install -e .
 ```
+
+Note: Currently, for use with Tree-Matching-Networks, the package MUST be installed in editable mode (-e) and in the same directory as Tree-Matching-Networks.
 
 ## Required Dependencies
 
@@ -249,7 +251,7 @@ Note: "InfoNCE" is currently the only format supported and is somewhat misleadin
 For large datasets, use the included batch processing script:
 
 ```bash
-python -m TMN_DataGen.run process \
+python /path/to/TMN_DataGen/run.py process \
   --input_path data/snli_1.0/snli_1.0_dev.jsonl \
   --out_dir processed_data/dev \
   --dataset_type snli \
