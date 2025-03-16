@@ -191,7 +191,7 @@ parser:
       model_name: "en_ewt.electra-base"  # DiaParser model name
     spacy:                    # SpaCy configuration
       enabled: true           # Whether to use this parser
-      model_name: "en_core_web_trf"  # SpaCy model name
+      model_name: "en_core_web_sm"  # SpaCy model name
   feature_sources:            # Which parser to use for which features
     tree_structure: "diaparser"  # DiaParser gives best tree structure
     pos_tags: "spacy"            # SpaCy is better for POS tagging
@@ -253,7 +253,7 @@ python -m TMN_DataGen.run process \
   --input_path data/snli_1.0/snli_1.0_dev.jsonl \
   --out_dir processed_data/dev \
   --dataset_type snli \
-  --spacy_model en_core_web_trf \
+  --spacy_model en_core_web_sm \
   --verbosity normal \
   --batch_size 100 \
   --num_partitions 2
@@ -266,7 +266,7 @@ The key command line arguments are:
 - `--input_path` / `-ip`: Path to input file or directory
 - `--out_dir` / `-od`: Output directory where processed data will be saved
 - `--dataset_type` / `-dt`: Type of dataset to process (`snli`, `wiki_qs`, `amazon_qa`, `patentmatch`, `semeval`)
-- `--spacy_model` / `-sm`: SpaCy model to use (e.g., `en_core_web_trf`, `en_core_web_lg`)
+- `--spacy_model` / `-sm`: SpaCy model to use (e.g., `en_core_web_sm`, `en_core_web_lg`)
 - `--verbosity` / `-v`: Logging verbosity level (`quiet`, `normal`, `debug`)
 - `--batch_size` / `-bs`: Number of text pairs per batch
 - `--max_lines` / `-ml`: Maximum number of lines to process (for testing)
