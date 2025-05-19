@@ -164,7 +164,7 @@ class DatasetGenerator:
         if self.config.output_format.label_map is not None:
             self.label_map = self.config.output_format.label_map
 
-        if not self.vocabs:
+        if not self.vocabs and self.config.preprocessing.tokenizer == 'vocab':
             vocabs = []
             vocab_model =  KeyedVectors.load_word2vec_format(self.config.preprocessing.get('vocab_model_path', '/home/jlunder/research/data/word2vec_model/GoogleNews-vectors-negative300.bin'), binary=True, limit=self.config.preprocessing.get('vocab_limit', 500000)) #take only top n common words 
             vocabs.append(vocab_model.index_to_key)
@@ -180,6 +180,8 @@ class DatasetGenerator:
             all_words = all_words.union(all_words_alpha_lower)
             vocabs.append(all_words)
             self.vocabs = vocabs
+        else:
+            self.vocabs = []
 
         # Initialize parser
         parser = MultiParser(config, pkg_config, self.vocabs, self.logger)
@@ -191,6 +193,7 @@ class DatasetGenerator:
             self.logger.info(f"Processing {len(text_pairs)} text pairs")
 
         is_paired = self.config.output_format and self.config.output_format.get('paired', False)
+        self_paired = self.config.output_format and self.config.output_format.get('self_paired', False)
         self.preprocessor = BasePreprocessor(self.config)
 
         # Split sentences and track groups
@@ -245,7 +248,7 @@ class DatasetGenerator:
 
         # Convert based on format
         if self.config.output_format.type == "infonce":
-            dataset = self._convert_to_infonce_format(tree_groups, is_paired)
+            dataset = self._convert_to_infonce_format(tree_groups, is_paired, self_paired)
             with open(output_path, 'w') as f:
                 json.dump(dataset, f, indent=4)
         # else:
@@ -266,7 +269,8 @@ class DatasetGenerator:
     def _convert_to_infonce_format(
         self,
         tree_groups: List[TreeGroup],
-        is_paired=False
+        is_paired=False,
+        self_paired=False
     ) -> Dict:
         """Convert to InfoNCE format with group tracking"""
         groups = []
@@ -283,7 +287,7 @@ class DatasetGenerator:
                     if t is not None
                 ]
             
-            add = (not is_paired and trees1) or (is_paired and trees1 and trees2)
+            add = (not is_paired and trees1) or (is_paired and trees1 and trees2) or (self_paired and trees1)
 
             if add:  # Only add if both have valid trees
                 group_data = {

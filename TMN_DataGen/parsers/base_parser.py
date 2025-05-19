@@ -8,7 +8,7 @@ from ..tree.dependency_tree import DependencyTree
 from ..utils.viz_utils import print_tree_text
 from ..utils.logging_config import setup_logger
 from ..utils.text_preprocessing import BasePreprocessor
-from ..utils.tokenizers import RegexTokenizer, StanzaTokenizer
+from ..utils.tokenizers import RegexTokenizer, StanzaTokenizer, VocabTokenizer
 from omegaconf import DictConfig
 # from gensim.models import KeyedVectors
 import torch
@@ -41,7 +41,7 @@ def _parallel_preprocess_tokenize(text: str) -> List[str]:
     """Worker function: preprocess and tokenize a single text."""
     global _worker_preprocessor, _worker_tokenizer
     clean_text = _worker_preprocessor.preprocess(text)
-    tokens = _worker_tokenizer.tokenize_with_vocab(clean_text)
+    tokens = _worker_tokenizer.tokenize(clean_text)
     return tokens
 
 class BaseTreeParser(ABC):
@@ -88,6 +88,8 @@ class BaseTreeParser(ABC):
             # Initialize Tokenizer
             if self.config.preprocessing.tokenizer == "stanza":
                 self.tokenizer = StanzaTokenizer(self.config, self.vocabs, self.logger)
+            elif self.config.preprocessing.tokenizer == 'vocab':
+                self.tokenizer = VocabTokenizer(self.config, self.vocabs, self.logger)
             else:
                 self.tokenizer = RegexTokenizer(self.config, self.vocabs, self.logger)
 
@@ -107,7 +109,7 @@ class BaseTreeParser(ABC):
     def preprocess_and_tokenize(self, text: str) -> List[str]:
         """Preprocess text and tokenize into words"""
         clean_text = self.preprocessor.preprocess(text)
-        tokens = self.tokenizer.tokenize_with_vocab(clean_text)
+        tokens = self.tokenizer.tokenize(clean_text)
         return tokens
 
     def parallel_preprocess_tokenize(self, texts: List[str], num_workers: int = None) -> List[List[str]]:

@@ -15,6 +15,52 @@ class BaseTokenizer(ABC):
         """
         self.config = config
         self.logger = logger
+
+    @abstractmethod
+    def tokenize(self, text: str) -> List[str]:
+        pass
+
+
+
+
+
+
+class RegexTokenizer(BaseTokenizer):
+    def __init__(self, config, vocab=None, logger=None):
+        super().__init__(config, vocab, logger)
+        self.min_len = config.preprocessing.min_token_length
+        self.max_len = config.preprocessing.max_token_length
+        
+    def tokenize(self, text: str) -> List[str]:
+        # Simple word boundary tokenization
+        tokens = re.findall(r'\b\w+\b', text)
+        # Apply length filters
+        tokens = [t for t in tokens 
+                 if self.min_len <= len(t) <= self.max_len]
+        return tokens
+
+class StanzaTokenizer(BaseTokenizer):
+    def __init__(self, config, vocab=None, logger=None):
+        super().__init__(config, vocab, logger)
+        try:
+            self.nlp = stanza.Pipeline(
+                lang=config.preprocessing.language,
+                processors='tokenize',
+                use_gpu=True,
+                verbose=False
+            )
+        except Exception as e:
+            raise ValueError(f"Failed to load Stanza: {e}")
+            
+    def tokenize(self, text: str) -> List[str]:
+        doc = self.nlp(text)
+        tokens = [word.text for sent in doc.sentences 
+                 for word in sent.words]
+        return tokens
+
+class VocabTokenizer(BaseTokenizer):
+    def __init__(self, config, vocabs=None, logger=None):
+        super().__init__(config, vocabs, logger)
         # Store vocab as a set for quick membership testing.
         self.vocabs = vocabs if vocabs is not None else [set()]
         self.allowed_two_letter = {
@@ -51,12 +97,11 @@ class BaseTokenizer(ABC):
             # Default to an empty set if not provided.
             self.vocabs = [set()]
 
-    @abstractmethod
-    def tokenize(self, text: str) -> List[str]:
-        pass
+        self.sub_tokenizer = StanzaTokenizer(config, vocabs, logger)
 
-    def tokenize_with_vocab(self, text: str) -> List[str]:
-        tokens = self.tokenize(text)
+
+    def tokenize(self, text: str) -> List[str]:
+        tokens = self.sub_tokenizer.tokenize(text)
         processed_tokens = []
         for token in tokens:
             if any(token in v for v in self.vocabs) or self.check_number(token) or len(token) < 5: #if less than 5 chars, highly unlikely to be a smashed word
@@ -178,39 +223,3 @@ class BaseTokenizer(ABC):
                 return result
         # If no valid substring is found:
         return [token] if n < 4 else []
-
-
-
-
-class RegexTokenizer(BaseTokenizer):
-    def __init__(self, config, vocab=None, logger=None):
-        super().__init__(config, vocab, logger)
-        self.min_len = config.preprocessing.min_token_length
-        self.max_len = config.preprocessing.max_token_length
-        
-    def tokenize(self, text: str) -> List[str]:
-        # Simple word boundary tokenization
-        tokens = re.findall(r'\b\w+\b', text)
-        # Apply length filters
-        tokens = [t for t in tokens 
-                 if self.min_len <= len(t) <= self.max_len]
-        return tokens
-
-class StanzaTokenizer(BaseTokenizer):
-    def __init__(self, config, vocab=None, logger=None):
-        super().__init__(config, vocab, logger)
-        try:
-            self.nlp = stanza.Pipeline(
-                lang=config.preprocessing.language,
-                processors='tokenize',
-                use_gpu=True,
-                verbose=False
-            )
-        except Exception as e:
-            raise ValueError(f"Failed to load Stanza: {e}")
-            
-    def tokenize(self, text: str) -> List[str]:
-        doc = self.nlp(text)
-        tokens = [word.text for sent in doc.sentences 
-                 for word in sent.words]
-        return tokens

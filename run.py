@@ -265,6 +265,19 @@ class BatchProcessor:
         self.logger.info(f"Loaded {len(data)} question groups")
         return data
 
+    @dataloader_handler("wiki_qs_folder")
+    def _load_question_groups_folder(self) -> List[Dict]:
+        """Load question group data from a folder of files containing question group data"""
+        self.logger.info(f"Loading data from {self.input_file}")
+        dir = self.input_file
+        data = []
+        for file in os.listdir(dir):
+            f = os.path.join(dir, file)
+            if os.path.isfile(f):
+                self.input_file = f
+                data.extend(self._load_question_groups())
+        return data
+
     @dataloader_handler('amazon_qa')
     def _load_amazon_qa_data(self) -> List[Dict]:
         """Load Amazon Q&A data from gzipped files"""
@@ -559,7 +572,7 @@ class BatchProcessor:
         elif self.dataset_type == 'snli':
             file_pattern = '*.jsonl'
         else:
-            file_pattern = '*.*'  # Default to all files
+            file_pattern = '*'  # Default to all files
         
         # Get all matching files in directory
         input_files = list(input_path.glob(file_pattern))

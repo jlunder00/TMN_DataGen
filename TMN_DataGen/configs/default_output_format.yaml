@@ -20,4 +20,5 @@ output_format:
   n_sentences: 2         # For first_n strategy
 
   paired: True
+  self_paired: True
   

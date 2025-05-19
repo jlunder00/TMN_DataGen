@@ -5,7 +5,7 @@ from .logging_config import setup_logger
 from .feature_utils import FeatureExtractor 
 from .viz_utils import print_tree_text, visualize_tree_graphviz, format_tree_pair
 from .text_preprocessing import BasePreprocessor
-from .tokenizers import BaseTokenizer, RegexTokenizer, StanzaTokenizer
+from .tokenizers import BaseTokenizer, RegexTokenizer, StanzaTokenizer, VocabTokenizer
 
 __all__ = [
     'logger', 'FeatureExtractor', 'print_tree_text', 'visualize_tree_graphviz',

@@ -4,7 +4,7 @@ preprocessing:
   tokenizer: stanza
   language: en
   preserve_case: false
-  remove_punctuation: true
+  remove_punctuation: false
   normalize_unicode: true
   remove_numbers: false
   max_token_length: 30
