@@ -131,7 +131,8 @@ class DatasetGenerator:
         verbosity: str = 'normal',
         override_pkg_config: Optional[Union[str, Dict]] = None,
         show_progress: bool = True,
-        cache_dir = None
+        cache_dir = None,
+        max_concurrent=None
     ) -> None:
         """
         Generate parsed dataset from sentence pairs
@@ -186,7 +187,7 @@ class DatasetGenerator:
             self.vocabs = []
 
         # Initialize parser
-        parser = MultiParser(config, pkg_config, self.vocabs, self.logger)
+        parser = MultiParser(config, pkg_config, self.vocabs, self.logger, max_concurrent)
 
 
         # Process sentence pairs

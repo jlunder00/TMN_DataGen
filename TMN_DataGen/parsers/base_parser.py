@@ -51,13 +51,13 @@ def _parallel_preprocess_only(text: str) -> str:
 class BaseTreeParser(ABC):
     _instances: Dict[str, 'BaseTreeParser'] = {}
     
-    def __new__(cls, config=None, pkg_config=None, vocabs= [set({})], logger=None):
+    def __new__(cls, config=None, pkg_config=None, vocabs= [set({})], logger=None, max_concurrent=1):
         if cls not in cls._instances:
             cls._instances[cls.__name__] = super(BaseTreeParser, cls).__new__(cls)
         return cls._instances[cls.__name__]
     
     @abstractmethod
-    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs = [set({})], logger=None):
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs = [set({})], logger=None, max_concurrent=1):
         if not hasattr(self, 'initialized'):
             self.config = config or {}
             self.verbose = self.config.get('verbose', 'normal') 
@@ -97,7 +97,7 @@ class BaseTreeParser(ABC):
             else:
                 self.tokenizer = RegexTokenizer(self.config, self.vocabs, self.logger)
 
-            
+            self.max_concurrent = max_concurrent
             self.initialized = True
     
     @abstractmethod

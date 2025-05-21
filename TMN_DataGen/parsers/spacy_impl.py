@@ -11,8 +11,8 @@ from omegaconf import DictConfig
 import torch, gc
 
 class SpacyTreeParser(BaseTreeParser):
-    def __init__(self, config: Optional[DictConfig] = None, pkg_config = None, vocabs = [set({})], logger = None):
-        super().__init__(config, pkg_config, vocabs, logger)
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config = None, vocabs = [set({})], logger = None, max_concurrent=1):
+        super().__init__(config, pkg_config, vocabs, logger, max_concurrent)
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_core_web_sm')
             self.model = spacy.load(model_name)

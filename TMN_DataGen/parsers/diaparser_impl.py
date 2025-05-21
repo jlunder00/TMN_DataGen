@@ -12,12 +12,12 @@ import numpy as np
 import torch, gc
 
 class DiaParserTreeParser(BaseTreeParser):
-    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs=[set({})], logger=None):
-        super().__init__(config, pkg_config, vocabs, logger)
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs=[set({})], logger=None, max_concurrent=1):
+        super().__init__(config, pkg_config, vocabs, logger, max_concurrent=max_concurrent)
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_ewt.electra-base')
             self.model = Parser.load(model_name)
-            # self.model.model = self.model.model.to(torch.device("cpu"))
+            self.model.model = self.model.model.to(torch.device("cpu"))
     
     def _process_prediction(self, dataset) -> List[Dict[str, List]]:
         """
@@ -81,9 +81,22 @@ class DiaParserTreeParser(BaseTreeParser):
         valid_token_lists = [tokens for tokens in processed_tokens if tokens]
 
         parse_time = time.time()
-        # self.model.model = self.model.model.to(torch.device("cuda"))
-        valid_dataset = self.model.predict(valid_token_lists, batch_size=self.diaparser_batch_size)
-        # self.model.model = self.model.model.to(torch.device("cpu"))
+        from TMN_DataGen.utils.gpu_coordinator import GPUCoordinator
+        coordinator = GPUCoordinator(max_concurrent=self.max_concurrent if hasattr(self, "max_concurrent") else 1, logger=self.logger)
+
+        # if coordinator.acquire_gpu(timeout=300):
+        with coordinator:
+            # try:
+            self.logger.info("using GPU for Diaparser prediction")
+            self.model.model = self.model.model.to(torch.device("cuda"))
+            valid_dataset = self.model.predict(valid_token_lists, batch_size=self.diaparser_batch_size)
+            self.model.model = self.model.model.to(torch.device("cpu"))
+            # finally:
+            #     coordinator.release_gpu()
+        # else:
+        #     self.model.model = self.model.model.to(torch.device("cuda"))
+        #     valid_dataset = self.model.predict(valid_token_lists, batch_size=self.diaparser_batch_size)
+        #     self.model.model = self.model.model.to(torch.device("cpu"))
         valid_token_data = self._process_prediction(valid_dataset)
 
         token_data_flat = [None]*len(processed_tokens)
@@ -145,8 +158,25 @@ class DiaParserTreeParser(BaseTreeParser):
             valid_sentences.append(sentence)
 
         try:
-            #diaparser can take in multiple token sets at once
-            dataset = self.model.predict(tokenized_sentences)
+            from TMN_DataGen.utils.gpu_coordinator import GPUCoordinator
+            coordinator = GPUCoordinator(max_concurrent=self.max_concurrent if hasattr(self, "max_concurrent") else 1, logger=self.logger)
+
+            # if coordinator.acquire_gpu(timeout=300):
+            with coordinator:
+                # try:
+                self.logger.info("using GPU for Diaparser prediction")
+                self.model.model = self.model.model.to(torch.device("cuda"))
+                dataset = self.model.predict(tokenized_sentences, batch_size=self.diaparser_batch_size)
+                self.model.model = self.model.model.to(torch.device("cpu"))
+            #     finally:
+            #         coordinator.release_gpu()
+            # else:
+            #     self.model.model = self.model.model.to(torch.device("cuda"))
+            #     dataset = self.model.predict(tokenized_sentences, batch_size=self.diaparser_batch_size)
+            #     self.model.model = self.model.model.to(torch.device("cpu"))
+
+            # #diaparser can take in multiple token sets at once
+            # dataset = self.model.predict(tokenized_sentences)
             token_data_group = self._process_prediction(dataset)
         except Exception as e:
             self.logger.error(f"Error while making/processing diaparser prediction for {valid_sentences}: {e}")

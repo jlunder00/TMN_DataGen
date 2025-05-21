@@ -16,12 +16,12 @@ import yaml
 from pathlib import Path
 
 class MultiParser(BaseTreeParser):
-    def __init__(self, config=None, pkg_config=None, vocabs=[set({})], logger=None):
+    def __init__(self, config=None, pkg_config=None, vocabs=[set({})], logger=None, max_concurrent=1):
         # Load package capabilities config
         self.capabilities = pkg_config['parsers'] if pkg_config else {}
 
         # Initialize base class
-        super().__init__(config, pkg_config, vocabs, logger)
+        super().__init__(config, pkg_config, vocabs, logger, max_concurrent)
 
         # Validate user's feature source config against capabilities
         self._validate_feature_sources()
@@ -33,7 +33,7 @@ class MultiParser(BaseTreeParser):
                 parser_class = self._get_parser_class(parser_name)
                 p_config = copy.deepcopy(self.config)
                 p_config['model_name'] = parser_config['model_name']
-                self.parsers[parser_name] = parser_class(p_config)
+                self.parsers[parser_name] = parser_class(p_config, max_concurrent=max_concurrent)
         
         self.initialized = True
 

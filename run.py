@@ -17,6 +17,7 @@ import torch.multiprocessing as mp
 from functools import partial
 from dotenv import load_dotenv
 from functools import wraps
+import concurrent.futures
 
 load_dotenv()
 
@@ -60,7 +61,8 @@ class BatchProcessor:
                  output_config: Optional[Dict] = None,
                  num_partitions: Optional[int] = None,
                  num_workers: Optional[int] = None,
-                 cache_dir = None):
+                 cache_dir = None,
+                 max_concurrent=1):
 
         # Dispatcher dictionaries!
         self._preparation_handlers = {}
@@ -72,6 +74,7 @@ class BatchProcessor:
             if getattr(method, "dataloader_handler", False):
                 self._dataloader_handlers[method.handler_key] = method
 
+        self.max_concurrent = max_concurrent
         self.dataset_type = dataset_type
         self.input_file = input_file
         self.output_dir = Path(output_dir)
@@ -86,7 +89,7 @@ class BatchProcessor:
         self.output_config = output_config
         self.num_partitions = num_partitions
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.num_workers = num_workers or max(1, cpu_count()-4)
+        self.num_workers = num_workers or max(1, cpu_count()-2)
         self.cache_dir = cache_dir
         
         # Set up logging
@@ -428,7 +431,8 @@ class BatchProcessor:
             feature_config=self.feature_config,
             output_config=self.output_config,
             merge_config = self.merge_config,
-            cache_dir = self.cache_dir
+            cache_dir = self.cache_dir,
+            max_concurrent=self.max_concurrent
         )
         
         self.processed_pairs.update(pair_ids)
@@ -584,38 +588,133 @@ class BatchProcessor:
             return
             
         self.logger.info(f"Found {len(input_files)} files to process")
+
+        # gpu_scheduler = GPUScheduler(max_concurrent=self.max_concurrent, logger=self.logger)
+        max_parallel = min(self.max_concurrent, len(input_files))
+        # with concurrent.futures.ProcessPoolExecutor(max_workers=max_parallel) as executor:
+        #     futures = []
+        #     for file_path in input_files:
+        #         self.logger.info(f"Scheduling file: {file_path.name}")
+        #         
+        #         # Create output subdirectory using stem name
+        #         file_output_dir = self.output_dir / file_path.stem
+        #         file_output_dir.mkdir(parents=True, exist_ok=True)
+        #         
+        #         # Create the arguments for a new processor
+        #         processor_args = (
+        #             str(file_path),
+        #             str(file_output_dir),
+        #             self.dataset_type,
+        #             self.max_lines,
+        #             self.batch_size,
+        #             self.checkpoint_every,
+        #             self.verbosity,
+        #             self.parser_config,
+        #             self.preprocessing_config, 
+        #             self.feature_config,
+        #             self.merge_config,
+        #             self.output_config,
+        #             self.num_partitions,
+        #             self.num_workers,
+        #             self.max_concurrent
+        #         )
+        #         
+        #         # Submit the processing job
+        #         future = executor.submit(self._process_file, *processor_args)
+        #         futures.append(future)
+        #         
+        #     # Wait for all processors to complete
+        #     for future in concurrent.futures.as_completed(futures):
+        #         try:
+        #             future.result()
+        #         except Exception as e:
+        #             self.logger.error(f"Error processing file: {e}")
+
+
+        import time
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_parallel) as executor:
+            futures = []
+            for i, file_path in enumerate(input_files):
+                self.logger.info(f"\nProcessing file: {file_path.name}")
+                
+                # Create output subdirectory using stem name (without extension)
+                file_output_dir = self.output_dir / file_path.stem
+                file_output_dir.mkdir(parents=True, exist_ok=True)
+                if self.cache_dir is not None:
+                    cache_dir = self.cache_dir if i == 0 else Path(str(self.cache_dir)+str(i%max_parallel))
+                else:
+                    cache_dir = self.cache_dir
+                self.logger.info(f"cache dir: {cache_dir}")
+                
+                # Create processor for this file
+                file_processor = BatchProcessor(
+                    input_file=str(file_path),
+                    output_dir=str(file_output_dir),
+                    dataset_type=self.dataset_type,
+                    max_lines=self.max_lines,
+                    batch_size=self.batch_size,
+                    checkpoint_every=self.checkpoint_every,
+                    verbosity=self.verbosity,
+                    parser_config=self.parser_config,
+                    preprocessing_config=self.preprocessing_config, 
+                    feature_config=self.feature_config,
+                    merge_config=self.merge_config,
+                    output_config=self.output_config,
+                    num_partitions=self.num_partitions,
+                    num_workers=self.num_workers,
+                    cache_dir=cache_dir,
+                    max_concurrent=self.max_concurrent  # Pass the GPU scheduler
+                )
+                future = executor.submit(file_processor.process_all)
+                futures.append(future)
+                if i < len(input_files) - 1:
+                    delay = 5  # seconds - adjust as needed
+                    self.logger.info(f"Waiting {delay}s before starting next thread...")
+                    time.sleep(delay)
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    self.logger.error(f"Error processing file: {e}")
+
         
         # Process each file
-        for file_path in input_files:
-            self.logger.info(f"\nProcessing file: {file_path.name}")
-            
-            # Create output subdirectory using stem name (without extension)
-            file_output_dir = self.output_dir / file_path.stem
-            file_output_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Create processor for this file
-            file_processor = BatchProcessor(
-                input_file=str(file_path),
-                output_dir=str(file_output_dir),
-                dataset_type=self.dataset_type,
-                max_lines=self.max_lines,
-                batch_size=self.batch_size,
-                checkpoint_every=self.checkpoint_every,
-                verbosity=self.verbosity,
-                parser_config=self.parser_config,
-                preprocessing_config=self.preprocessing_config, 
-                feature_config=self.feature_config,
-                merge_config=self.merge_config,
-                output_config=self.output_config,
-                num_partitions=self.num_partitions,
-                num_workers=self.num_workers,
-                cache_dir = self.cache_dir
-            )
-            
-            try:
-                file_processor.process_all()
-            except Exception as e:
-                self.logger.error(f"Error processing {file_path.name}: {e}")
+        # for file_path in input_files:
+        #     self.logger.info(f"\nProcessing file: {file_path.name}")
+        #     
+        #     # Create output subdirectory using stem name (without extension)
+        #     file_output_dir = self.output_dir / file_path.stem
+        #     file_output_dir.mkdir(parents=True, exist_ok=True)
+        #     
+        #     # Create processor for this file
+        #     file_processor = BatchProcessor(
+        #         input_file=str(file_path),
+        #         output_dir=str(file_output_dir),
+        #         dataset_type=self.dataset_type,
+        #         max_lines=self.max_lines,
+        #         batch_size=self.batch_size,
+        #         checkpoint_every=self.checkpoint_every,
+        #         verbosity=self.verbosity,
+        #         parser_config=self.parser_config,
+        #         preprocessing_config=self.preprocessing_config, 
+        #         feature_config=self.feature_config,
+        #         merge_config=self.merge_config,
+        #         output_config=self.output_config,
+        #         num_partitions=self.num_partitions,
+        #         num_workers=self.num_workers,
+        #         cache_dir = self.cache_dir
+        #     )
+        #     
+        #     try:
+        #         file_processor.process_all()
+        #     except Exception as e:
+        #         self.logger.error(f"Error processing {file_path.name}: {e}")
+
+    # def _process_file(self, file_processor):
+    #     try:
+    #         file_processor.process_all()
+    #     except Exception as e:
+    #         self.logger.error(f"Error processing file: {e}")
 
 def merge_partition_files(file_paths: List[str], output_path: str):
     """Merge multiple partition files into one"""
@@ -687,8 +786,12 @@ if __name__ == '__main__':
                                 default="snli",
                                 help="Number of worker processes for parallel operations")
     process_parser.add_argument("-cd", "--cache_dir",
-                                type=str,
+                                type=Path,
                                 help="Optional cache directory override")
+    process_parser.add_argument("-mc", "--max_concurrent",
+                                type=int,
+                                default=1,
+                                help="Max concurrent batch processor")
 
 
     
@@ -734,7 +837,8 @@ if __name__ == '__main__':
             parser_config=parser_config,
             num_partitions=args.num_partitions,
             num_workers=args.workers,
-            cache_dir=args.cache_dir
+            cache_dir=args.cache_dir,
+            max_concurrent=args.max_concurrent
         )
         processor.process_directory()
         
