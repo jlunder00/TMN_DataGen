@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 import json
 from pathlib import Path
 from typing import Dict, List, Optional

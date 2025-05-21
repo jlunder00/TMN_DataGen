@@ -1,5 +1,8 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 # TMN_DataGen/TMN_DataGen/parsers/multi_parser.py
 import time
+import copy
 from typing import List, Dict, Any, Optional
 from omegaconf import DictConfig
 from .base_parser import BaseTreeParser
@@ -26,7 +29,9 @@ class MultiParser(BaseTreeParser):
         for parser_name, parser_config in self.config.parser.parsers.items():
             if parser_config.get('enabled', False):
                 parser_class = self._get_parser_class(parser_name)
-                self.parsers[parser_name] = parser_class(self.config)
+                p_config = copy.deepcopy(self.config)
+                p_config['model_name'] = parser_config['model_name']
+                self.parsers[parser_name] = parser_class(p_config)
         
         self.initialized = True
 

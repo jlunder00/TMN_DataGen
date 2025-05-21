@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 #TMN_DataGen/utils/embedding_cache.py
 import numpy as np
 import torch

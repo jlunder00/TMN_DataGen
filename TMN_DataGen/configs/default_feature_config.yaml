@@ -1,9 +1,10 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
 # TMN_DataGen/TMN_DataGen/configs/default_feature_config.yaml
 feature_extraction:
   word_embedding_model: bert-base-uncased
   use_gpu: true  
   cache_embeddings: true
-  embedding_cache_dir: embedding_cache4
+  embedding_cache_dir: embedding_cache5
   do_not_store_word_embeddings: True
   do_not_compute_word_embeddings: False
   batch_size: 256

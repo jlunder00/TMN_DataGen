@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 #spacy_impl.py
 import time
 from .base_parser import BaseTreeParser
@@ -14,14 +16,6 @@ class SpacyTreeParser(BaseTreeParser):
             model_name = self.config.get('model_name', 'en_core_web_sm')
             self.model = spacy.load(model_name)
     
-    # def parse_batch(self, sentence_groups: List[List[str]]) -> List[List[DependencyTree]]:
-    #     self.logger.info("Begin Spacy batch processing")
-    #     tree_groups = [self.parse_single(group) for group in sentence_groups]
-
-    #     if len(tree_groups) < 1:
-    #         self.logger.warning("No valid trees produced from batch")
-    #         tree_groups = [[None for sentence in group] for group in sentence_groups]
-    #     return tree_groups
     def parse_batch(self, sentence_groups: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
         pass
 

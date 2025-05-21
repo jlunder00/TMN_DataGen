@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 #setup.py
 import os
 from setuptools import setup, find_packages
@@ -10,7 +12,7 @@ with open(os.path.dirname(__file__) + "/requirements.txt", "r") as R:
 
 setup(
     name="TMN_DataGen",
-    version='0.7.2',
+    version='1.0.0',
     description="Tree Matching Network Data Generator",
     author="toast",
     packages=find_packages(),

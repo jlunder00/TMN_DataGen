@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 # TMN_DataGen/TMN_DataGen/utils/viz_utils.py
 
 from typing import Optional, Dict, Any, Tuple

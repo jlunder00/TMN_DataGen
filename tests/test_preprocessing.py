@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 # tests/test_preprocessing.py
 from TMN_DataGen.utils import BasePreprocessor
 from TMN_DataGen.utils import RegexTokenizer, StanzaTokenizer

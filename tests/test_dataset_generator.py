@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 # tests/test_dataset_generator.py
 import pytest
 from TMN_DataGen import DatasetGenerator

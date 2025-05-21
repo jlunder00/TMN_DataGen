@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 #diaparser_impl.py
 import time
 from .base_parser import BaseTreeParser

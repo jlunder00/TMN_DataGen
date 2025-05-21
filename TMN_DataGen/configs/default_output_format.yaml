@@ -1,3 +1,4 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
 # output_format:
 output_format:
 #   type: "similarity"  # or "similarity" 
@@ -19,4 +20,5 @@ output_format:
   n_sentences: 2         # For first_n strategy
 
   paired: True
+  self_paired: True
   

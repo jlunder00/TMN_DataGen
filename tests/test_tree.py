@@ -1,3 +1,5 @@
+# Authored by: Jason Lunder, EWUID: 01032294, Github: https://github.com/jlunder00/
+
 # tests/test_tree.py
 from TMN_DataGen.tree import Node, DependencyTree
 
