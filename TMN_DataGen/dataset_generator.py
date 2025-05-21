@@ -130,7 +130,8 @@ class DatasetGenerator:
         merge_config: Optional[Union[str, Dict]] = None,
         verbosity: str = 'normal',
         override_pkg_config: Optional[Union[str, Dict]] = None,
-        show_progress: bool = True
+        show_progress: bool = True,
+        cache_dir = None
     ) -> None:
         """
         Generate parsed dataset from sentence pairs
@@ -161,6 +162,7 @@ class DatasetGenerator:
                 )
 
         self.config = config
+        config.feature_extraction.embedding_cache_dir = cache_dir if cache_dir else config.feature_extraction.embedding_cache_dir
         if self.config.output_format.label_map is not None:
             self.label_map = self.config.output_format.label_map
 

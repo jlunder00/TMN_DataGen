@@ -11,7 +11,7 @@ from ..utils.text_preprocessing import BasePreprocessor
 from ..utils.tokenizers import RegexTokenizer, StanzaTokenizer, VocabTokenizer
 from omegaconf import DictConfig
 # from gensim.models import KeyedVectors
-import torch
+import torch, gc
 from tqdm import tqdm
 from itertools import repeat
 # from english_words import get_english_words_set
@@ -144,6 +144,9 @@ class BaseTreeParser(ABC):
         else:
             with ProcessPoolExecutor(max_workers=num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs, self.logger)) as executor:
                 token_lists = list(executor.map(_parallel_preprocess_tokenize, texts))
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         return token_lists
     
     def parse_all(self, sentence_groups: List[List[str]], show_progress: bool = True, num_workers: int = 1) -> List[List[DependencyTree]]:

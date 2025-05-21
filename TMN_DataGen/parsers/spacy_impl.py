@@ -8,6 +8,7 @@ from ..tree.dependency_tree import DependencyTree
 import spacy
 from typing import List, Any, Optional
 from omegaconf import DictConfig
+import torch, gc
 
 class SpacyTreeParser(BaseTreeParser):
     def __init__(self, config: Optional[DictConfig] = None, pkg_config = None, vocabs = [set({})], logger = None):
@@ -49,6 +50,9 @@ class SpacyTreeParser(BaseTreeParser):
                     trees_flat.append(None)
         self.logger.info(f"tree building in spacy parser took: {time.time()-convert_time}")
         
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         return trees_flat
 

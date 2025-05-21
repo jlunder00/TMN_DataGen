@@ -3,6 +3,8 @@
 # TMN_DataGen/TMN_DataGen/parsers/multi_parser.py
 import time
 import copy
+import torch
+import gc
 from typing import List, Dict, Any, Optional
 from omegaconf import DictConfig
 from .base_parser import BaseTreeParser
@@ -155,6 +157,10 @@ class MultiParser(BaseTreeParser):
         for idx, (group_index, sentence_index) in enumerate(index_map):
             final_groups[group_index][sentence_index] = final_results_flat[idx]
         self.logger.info(f"reassembly time in multiparser took: {time.time() - reassembly_time} seconds")
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
 
         return final_groups
 

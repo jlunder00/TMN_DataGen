@@ -59,7 +59,8 @@ class BatchProcessor:
                  merge_config: Optional[Dict] = None,
                  output_config: Optional[Dict] = None,
                  num_partitions: Optional[int] = None,
-                 num_workers: Optional[int] = None):
+                 num_workers: Optional[int] = None,
+                 cache_dir = None):
 
         # Dispatcher dictionaries!
         self._preparation_handlers = {}
@@ -86,6 +87,7 @@ class BatchProcessor:
         self.num_partitions = num_partitions
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.num_workers = num_workers or max(1, cpu_count()-4)
+        self.cache_dir = cache_dir
         
         # Set up logging
         log_file = self.output_dir / 'processing.log'
@@ -426,6 +428,7 @@ class BatchProcessor:
             feature_config=self.feature_config,
             output_config=self.output_config,
             merge_config = self.merge_config,
+            cache_dir = self.cache_dir
         )
         
         self.processed_pairs.update(pair_ids)
@@ -605,7 +608,8 @@ class BatchProcessor:
                 merge_config=self.merge_config,
                 output_config=self.output_config,
                 num_partitions=self.num_partitions,
-                num_workers=self.num_workers
+                num_workers=self.num_workers,
+                cache_dir = self.cache_dir
             )
             
             try:
@@ -682,6 +686,9 @@ if __name__ == '__main__':
                                 choices=['snli', 'wiki_qs', 'amazon_qa', 'patentmatch', 'semeval'],
                                 default="snli",
                                 help="Number of worker processes for parallel operations")
+    process_parser.add_argument("-cd", "--cache_dir",
+                                type=str,
+                                help="Optional cache directory override")
 
 
     
@@ -726,7 +733,8 @@ if __name__ == '__main__':
             verbosity=args.verbosity,
             parser_config=parser_config,
             num_partitions=args.num_partitions,
-            num_workers=args.workers
+            num_workers=args.workers,
+            cache_dir=args.cache_dir
         )
         processor.process_directory()
         
