@@ -47,7 +47,8 @@ class StanzaTokenizer(BaseTokenizer):
                 lang=config.preprocessing.language,
                 processors='tokenize',
                 use_gpu=True,
-                verbose=False
+                verbose=False,
+                tokenize_no_ssplit = True
             )
         except Exception as e:
             raise ValueError(f"Failed to load Stanza: {e}")
@@ -57,6 +58,11 @@ class StanzaTokenizer(BaseTokenizer):
         tokens = [word.text for sent in doc.sentences 
                  for word in sent.words]
         return tokens
+
+    def tokenize_parallel_stanza(self, texts: List[str]) -> List[List[str]]:
+        doc = self.nlp(texts)
+        text_tokens = [[word.text for word in sent.words] for sent in doc.sentences]
+        return text_tokens
 
 class VocabTokenizer(BaseTokenizer):
     def __init__(self, config, vocabs=None, logger=None):

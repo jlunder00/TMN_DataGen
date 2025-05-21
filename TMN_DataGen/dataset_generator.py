@@ -200,6 +200,8 @@ class DatasetGenerator:
         sentence_groups = []
         group_metadata = []
         
+        import time
+        start = time.time()
         for i, (text1, text2) in enumerate(text_pairs):
             # Split into sentences
             text2_clean = text2
@@ -225,6 +227,7 @@ class DatasetGenerator:
             if is_paired:
                 to_add.append(group2)
             sentence_groups.extend(to_add)
+        print(f"preprocess took {(time.time()-start)}")
 
         # Parse all sentences
         all_tree_groups = parser.parse_all(sentence_groups, show_progress, num_workers=self.num_workers)

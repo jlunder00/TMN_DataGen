@@ -24,7 +24,7 @@ from concurrent.futures import ProcessPoolExecutor
 _worker_preprocessor = None
 _worker_tokenizer = None
 
-def _init_worker(config, vocabs, logger):
+def _init_worker(config, vocabs, logger, preprocess_only=False):
     """Initializer for each worker process.
     This sets up the preprocessor and tokenizer using the given config.
     """
@@ -32,7 +32,7 @@ def _init_worker(config, vocabs, logger):
     from TMN_DataGen.utils.text_preprocessing import BasePreprocessor
     from TMN_DataGen.utils.tokenizers import RegexTokenizer, StanzaTokenizer
     _worker_preprocessor = BasePreprocessor(config)
-    if config.preprocessing.tokenizer == "stanza":
+    if config.preprocessing.tokenizer == "stanza" and not preprocess_only:
         _worker_tokenizer = StanzaTokenizer(config, vocabs, logger)
     else:
         _worker_tokenizer = RegexTokenizer(config, vocabs, logger)
@@ -43,6 +43,10 @@ def _parallel_preprocess_tokenize(text: str) -> List[str]:
     clean_text = _worker_preprocessor.preprocess(text)
     tokens = _worker_tokenizer.tokenize(clean_text)
     return tokens
+
+def _parallel_preprocess_only(text: str) -> str:
+    global _worker_preprocessor
+    return _worker_preprocessor.preprocess(text)
 
 class BaseTreeParser(ABC):
     _instances: Dict[str, 'BaseTreeParser'] = {}
@@ -125,8 +129,18 @@ class BaseTreeParser(ABC):
             List[List[str]]: A list where each element is the list of tokens for the corresponding text.
         """
         self.logger.info("Parallel preprocessing/tokenization of {} texts".format(len(texts)))
-        if num_workers < 2 or self.config.preprocessing.tokenizer == "stanza":
+        if num_workers < 2:
             token_lists = [self.preprocess_and_tokenize(text) for text in texts]
+        elif self.config.preprocessing.tokenizer == "stanza":
+            with ProcessPoolExecutor(max_workers=num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs, self.logger, True)) as executor:
+                clean_texts = list(executor.map(_parallel_preprocess_only, texts))
+            # batch_size = 25
+            # batches = [clean_texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
+            batches = [clean_texts]
+            token_lists = []
+            for batch in batches:
+                token_lists.extend(self.tokenizer.tokenize_parallel_stanza(batch))
+
         else:
             with ProcessPoolExecutor(max_workers=num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs, self.logger)) as executor:
                 token_lists = list(executor.map(_parallel_preprocess_tokenize, texts))
