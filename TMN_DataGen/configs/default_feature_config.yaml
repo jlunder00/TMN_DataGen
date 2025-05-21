@@ -4,6 +4,7 @@ feature_extraction:
   word_embedding_model: bert-base-uncased
   use_gpu: true  
   cache_embeddings: true
+  cache_use_gpu: False
   embedding_cache_dir: embedding_cache5
   do_not_store_word_embeddings: True
   do_not_compute_word_embeddings: False

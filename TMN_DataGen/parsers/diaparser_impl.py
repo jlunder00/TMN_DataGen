@@ -9,6 +9,7 @@ from diaparser.parsers import Parser
 from typing import List, Dict, Any, Optional, Tuple
 from omegaconf import DictConfig
 import numpy as np
+import torch, gc
 
 class DiaParserTreeParser(BaseTreeParser):
     def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs=[set({})], logger=None):
@@ -16,6 +17,7 @@ class DiaParserTreeParser(BaseTreeParser):
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_ewt.electra-base')
             self.model = Parser.load(model_name)
+            # self.model.model = self.model.model.to(torch.device("cpu"))
     
     def _process_prediction(self, dataset) -> List[Dict[str, List]]:
         """
@@ -79,7 +81,9 @@ class DiaParserTreeParser(BaseTreeParser):
         valid_token_lists = [tokens for tokens in processed_tokens if tokens]
 
         parse_time = time.time()
+        # self.model.model = self.model.model.to(torch.device("cuda"))
         valid_dataset = self.model.predict(valid_token_lists, batch_size=self.diaparser_batch_size)
+        # self.model.model = self.model.model.to(torch.device("cpu"))
         valid_token_data = self._process_prediction(valid_dataset)
 
         token_data_flat = [None]*len(processed_tokens)
@@ -102,6 +106,9 @@ class DiaParserTreeParser(BaseTreeParser):
                 self.logger.error(f"Error while building tree from diaparser data for: {sentence}: {e}")
                 trees_flat.append(None)
         self.logger.info(f"tree building in diaparser took: {time.time()-build_time}")
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         return trees_flat
     
@@ -111,6 +118,9 @@ class DiaParserTreeParser(BaseTreeParser):
         if len(tree_groups) < 1:
             self.logger.warning("No valid trees produced from batch")
             tree_groups = [[None for _ in group] for group in sentence_groups]
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         return tree_groups
     
     def parse_single(self, sentences: List[str], num_workers: int = 1) -> List[DependencyTree]:

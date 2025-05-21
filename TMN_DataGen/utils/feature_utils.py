@@ -68,7 +68,7 @@ class FeatureExtractor:
                     shard_size = model_cfg.get("shard_size", 10000),
                     num_workers = model_cfg.get("num_workers", None),
                     config = model_cfg,
-                    device = self.device
+                    device = torch.device('cuda' if model_cfg.get('cache_use_gpu', False) and torch.cuda.is_available() else 'cpu')
                 )
                 # self._load_embedding_cache()
                 self.embedding_cache.load()
@@ -144,7 +144,7 @@ class FeatureExtractor:
             self.logger.info(f"Embedding cache contains {len(cache_data.values())} items")
             self.embedding_cache = {}
             for word, emb in tqdm(cache_data.items()):
-                self.embedding_cache[word] = torch.from_numpy(emb)
+                self.embedding_cache[word] = torch.from_numpy(emb).to('cpu')
         else:
             self.embedding_cache = {}
 
@@ -165,7 +165,7 @@ class FeatureExtractor:
         if self.cache_embeddings and word in self.embedding_cache:
             if self.do_not_store_word_embeddings and not self.is_runtime:
                 return None  # No need to spend time doing retrieval
-            return self.embedding_cache[word]
+            return self.embedding_cache[word].to(self.device)
 
         inputs = self.tokenizer(
             word,
