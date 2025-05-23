@@ -51,20 +51,19 @@ def _parallel_preprocess_only(text: str) -> str:
 class BaseTreeParser(ABC):
     _instances: Dict[str, 'BaseTreeParser'] = {}
     
-    def __new__(cls, config=None, pkg_config=None, vocabs= [set({})], logger=None, max_concurrent=1):
+    def __new__(cls, config=None, pkg_config=None, vocabs= [set({})], logger=None, max_concurrent=1, num_workers=1):
         if cls not in cls._instances:
             cls._instances[cls.__name__] = super(BaseTreeParser, cls).__new__(cls)
         return cls._instances[cls.__name__]
     
     @abstractmethod
-    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs = [set({})], logger=None, max_concurrent=1):
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs = [set({})], logger=None, max_concurrent=1, num_workers=1):
         if not hasattr(self, 'initialized'):
             self.config = config or {}
             self.verbose = self.config.get('verbose', 'normal') 
             self.batch_size = self.config.get('parser', {}).get('batch_size', 32)
             self.spacy_batch_size = self.config.get('parser', {}).get('spacy_batch_size', 10000)
-            self.diaparser_batch_size = self.config.get('parser', {}).get('diaparser_batch_size', 5000)
-            
+            self.diaparser_batch_size = self.config.get('parser', {}).get('diaparser_batch_size', 5000)           
             # Set up logger
             self.logger = logger or setup_logger(
                     self.__class__.__name__,
@@ -97,16 +96,17 @@ class BaseTreeParser(ABC):
             else:
                 self.tokenizer = RegexTokenizer(self.config, self.vocabs, self.logger)
 
+            self.num_workers = num_workers
             self.max_concurrent = max_concurrent
             self.initialized = True
     
     @abstractmethod
-    def parse_batch(self, sentence_groups: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
+    def parse_batch(self, sentence_groups: List[List[str]]) -> List[List[DependencyTree]]:
         """Parse a batch of sentence groups into dependency trees groups"""
         pass
     
     @abstractmethod
-    def parse_single(self, sentence_group: List[str], num_workers: int = 1) -> List[DependencyTree]:
+    def parse_single(self, sentence_group: List[str]) -> List[DependencyTree]:
         """Parse a single sentence group into a dependency tree group"""
         pass
 
@@ -116,7 +116,7 @@ class BaseTreeParser(ABC):
         tokens = self.tokenizer.tokenize(clean_text)
         return tokens
 
-    def parallel_preprocess_tokenize(self, texts: List[str], num_workers: int = None) -> List[List[str]]:
+    def parallel_preprocess_tokenize(self, texts: List[str]) -> List[List[str]]:
         """
         Process many texts in parallel by preprocessing and tokenizing each.
         
@@ -129,10 +129,10 @@ class BaseTreeParser(ABC):
             List[List[str]]: A list where each element is the list of tokens for the corresponding text.
         """
         self.logger.info("Parallel preprocessing/tokenization of {} texts".format(len(texts)))
-        if num_workers < 2:
+        if self.num_workers < 2:
             token_lists = [self.preprocess_and_tokenize(text) for text in texts]
         elif self.config.preprocessing.tokenizer == "stanza":
-            with ProcessPoolExecutor(max_workers=num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs, self.logger, True)) as executor:
+            with ProcessPoolExecutor(max_workers=self.num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs, self.logger, True)) as executor:
                 clean_texts = list(executor.map(_parallel_preprocess_only, texts))
             # batch_size = 25
             # batches = [clean_texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
@@ -142,14 +142,14 @@ class BaseTreeParser(ABC):
                 token_lists.extend(self.tokenizer.tokenize_parallel_stanza(batch))
 
         else:
-            with ProcessPoolExecutor(max_workers=num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs, self.logger)) as executor:
+            with ProcessPoolExecutor(max_workers=self.num_workers, initializer=_init_worker, initargs=(self.config, self.vocabs, self.logger)) as executor:
                 token_lists = list(executor.map(_parallel_preprocess_tokenize, texts))
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         return token_lists
     
-    def parse_all(self, sentence_groups: List[List[str]], show_progress: bool = True, num_workers: int = 1) -> List[List[DependencyTree]]:
+    def parse_all(self, sentence_groups: List[List[str]], show_progress: bool = True) -> List[List[DependencyTree]]:
         """Parse all sentences with batching and progress bar."""
         if not isinstance(sentence_groups, list):
             raise TypeError("sentence_groups must be a list of lists of strings")
@@ -167,7 +167,7 @@ class BaseTreeParser(ABC):
             if show_progress and self.verbose == 'normal' or self.verbose == 'debug':
                 self.logger.info(f"Processing batch {i//self.batch_size + 1} with {self.batch_size} group pairs")
             
-            batch_trees = self.parse_batch(batch, num_workers)
+            batch_trees = self.parse_batch(batch)
             
             if self.verbose == 'debug':
                 for group, group_trees in zip(batch, batch_trees):

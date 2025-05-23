@@ -6,9 +6,10 @@ from .feature_utils import FeatureExtractor
 from .viz_utils import print_tree_text, visualize_tree_graphviz, format_tree_pair
 from .text_preprocessing import BasePreprocessor
 from .tokenizers import BaseTokenizer, RegexTokenizer, StanzaTokenizer, VocabTokenizer
+from .parallel_framework import ParallelizationMixin
 
 __all__ = [
     'logger', 'FeatureExtractor', 'print_tree_text', 'visualize_tree_graphviz',
     'format_tree_pair', 'BasePreprocessor', 'BaseTokenizer', 'RegexTokenizer',
-    'StanzaTokenizer'
+    'StanzaTokenizer', 'ParallelizationMixin'
 ]

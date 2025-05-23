@@ -10,15 +10,50 @@ from typing import List, Dict, Any, Optional, Tuple
 from omegaconf import DictConfig
 import numpy as np
 import torch, gc
+from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process
 
-class DiaParserTreeParser(BaseTreeParser):
-    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs=[set({})], logger=None, max_concurrent=1):
-        super().__init__(config, pkg_config, vocabs, logger, max_concurrent=max_concurrent)
+class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
+    def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs=[set({})], logger=None, max_concurrent=1, num_workers=1):
+        super().__init__(config, pkg_config, vocabs, logger, max_concurrent=max_concurrent, num_workers)
+        ParallelizationMixin.__init__(self)
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_ewt.electra-base')
             self.model = Parser.load(model_name)
             self.model.model = self.model.model.to(torch.device("cpu"))
     
+    def _process_prediction_batch(self, sentence_batch: List[Tuple[int, Any]]) -> List[Tuple[int, Dict[str, List]]]:
+        """Process a batch of sentences from DiaParser output"""
+        results = []
+        
+        for i, sentence in sentence_batch:
+            try:
+                def ensure_list(val) -> List[str]:
+                    """Convert various input formats to list"""
+                    if isinstance(val, str):
+                        return val.split()
+                    return list(val)
+
+                token_data = {
+                    'words': ensure_list(sentence.values[1]),
+                    'lemmas': ensure_list(sentence.values[2]),
+                    'pos_tags': ensure_list(sentence.values[3]),
+                    'heads': [int(h) for h in ensure_list(sentence.values[6])],
+                    'rels': ensure_list(sentence.values[7])
+                }
+
+                # Verify all lists have same length
+                list_lens = [len(lst) for lst in token_data.values()]
+                if len(set(list_lens)) != 1:
+                    raise ValueError(f"Inconsistent token list lengths: {list_lens}")
+                
+                results.append((i, token_data))
+                
+            except Exception as e:
+                self.logger.error(f"Error processing parser output for sentence {i}: {e}")
+                results.append((i, None))
+        
+        return results
+
     def _process_prediction(self, dataset) -> List[Dict[str, List]]:
         """
         Process diaparser output into aligned lists of token information.
@@ -33,48 +68,80 @@ class DiaParserTreeParser(BaseTreeParser):
             List of Dict with keys: words, lemmas, pos_tags, heads, rels
             All lists are aligned by token position
         """
-        token_data_group = []
-        for i in range(len(dataset.sentences)):
-            sentence = dataset.sentences[i]
+        if self.parallel_config.get('diaparser_processing', True) and len(dataset.sentences) >= 100:
+            # Parallel
+            self.logger.info("Using parallel DiaParser prediction processing")
             
-            self.logger.debug(f"Processing CoNLL format sentence:")
-            self.logger.debug(f"Raw values: {sentence.values}")
+            # Prepare sentence data with indices
+            sentence_data = [(i, dataset.sentences[i]) for i in range(len(dataset.sentences))]
+
+            chunk_size = self._get_chunk_size('diaparser_processing', 50, len(sentence_data))
             
-            def ensure_list(val) -> List[str]:
-                """Convert various input formats to list"""
-                if isinstance(val, str):
-                    return val.split()
-                return list(val)
-
-            try:
-                token_data = {
-                    'words': ensure_list(sentence.values[1]),
-                    'lemmas': ensure_list(sentence.values[2]),
-                    'pos_tags': ensure_list(sentence.values[3]),
-                    'heads': [int(h) for h in ensure_list(sentence.values[6])],
-                    'rels': ensure_list(sentence.values[7])
-                }
-
-                # Verify all lists have same length
-                list_lens = [len(lst) for lst in token_data.values()]
-                if len(set(list_lens)) != 1:
-                    raise ValueError(
-                        f"Inconsistent token list lengths: {list_lens}"
-                    )
+            # Process in parallel
+            processing_results = batch_parallel_process(
+                sentence_data,
+                # lambda batch: self._process_prediction_batch(batch) if isinstance(batch, list) else [self._process_prediction_batch([batch])[0]],
+                lambda item: self._process_prediction_batch([item]),
+                num_workers=self.num_workers,
+                chunk_size=chunk_size,
+                maintain_order=True
+            )
+            
+            # Flatten and sort results to maintain order
+            flattened_results = []
+            for result_batch in processing_results:
+                if isinstance(result_batch, list):
+                    flattened_results.extend(result_batch)
+                else:
+                    flattened_results.append(result_batch)
+            
+            # Sort by index and extract token data
+            flattened_results.sort(key=lambda x: x[0])
+            token_data_group = [result[1] for result in flattened_results if result[1] is not None]
+            
+        else:
+            token_data_group = []
+            for i in range(len(dataset.sentences)):
+                sentence = dataset.sentences[i]
                 
-                self.logger.debug("Processed token data:")
-                for key, value in token_data.items():
-                    self.logger.debug(f"{key}: {value}")
-
-                token_data_group.append(token_data)
+                self.logger.debug(f"Processing CoNLL format sentence:")
+                self.logger.debug(f"Raw values: {sentence.values}")
                 
-            except Exception as e:
-                self.logger.error(f"Error processing parser output: {e}")
-                self.logger.debug(f"Values: {sentence.values}")
-                raise
+                def ensure_list(val) -> List[str]:
+                    """Convert various input formats to list"""
+                    if isinstance(val, str):
+                        return val.split()
+                    return list(val)
+
+                try:
+                    token_data = {
+                        'words': ensure_list(sentence.values[1]),
+                        'lemmas': ensure_list(sentence.values[2]),
+                        'pos_tags': ensure_list(sentence.values[3]),
+                        'heads': [int(h) for h in ensure_list(sentence.values[6])],
+                        'rels': ensure_list(sentence.values[7])
+                    }
+
+                    # Verify all lists have same length
+                    list_lens = [len(lst) for lst in token_data.values()]
+                    if len(set(list_lens)) != 1:
+                        raise ValueError(
+                            f"Inconsistent token list lengths: {list_lens}"
+                        )
+                    
+                    self.logger.debug("Processed token data:")
+                    for key, value in token_data.items():
+                        self.logger.debug(f"{key}: {value}")
+
+                    token_data_group.append(token_data)
+                    
+                except Exception as e:
+                    self.logger.error(f"Error processing parser output: {e}")
+                    self.logger.debug(f"Values: {sentence.values}")
+                    raise
         return token_data_group
         
-    def parse_batch_flat(self, flat_sentences, processed_texts: List[str], processed_tokens: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
+    def parse_batch_flat(self, flat_sentences, processed_texts: List[str], processed_tokens: List[List[str]]) -> List[List[DependencyTree]]:
         
         trees_flat = []
         valid_token_list_indices = [i for i, tokens in enumerate(processed_tokens) if tokens]
@@ -105,19 +172,50 @@ class DiaParserTreeParser(BaseTreeParser):
         self.logger.info(f"parsing in diaparser parser took: {time.time()-parse_time}")
             
         build_time = time.time()
-        for token_data, sentence in zip(token_data_flat, flat_sentences):
-            try:
-                if token_data and sentence:
-                    tree = self._build_tree(token_data, sentence)
-                    if tree:
-                        trees_flat.append(tree)
+        if self.parallel_config.get('tree_building', True) and len(token_data_flat) >= 50:
+            # Parallel
+            self.logger.info("Using parallel tree building")
+            
+            # Prepare tree building data
+            tree_build_data = [(token_data, sentence) 
+                              for token_data, sentence in zip(token_data_flat, flat_sentences)]
+            
+            chunk_size = self._get_chunk_size('tree_building', 25, len(tree_build_data))
+            
+            # Build trees in parallel
+            tree_results = batch_parallel_process(
+                tree_build_data,
+                # lambda batch: self._build_tree_batch(batch) if isinstance(batch, list) else [self._build_tree_batch([batch])[0]],
+                lambda item: self._build_tree(item[0], item[1]) if item[0] and item[1] else None,
+                num_workers=self.num_workers,
+                chunk_size=chunk_size,
+                maintain_order=True
+            )
+            
+            trees_flat = tree_results
+            
+            # # Flatten results
+            # for result_batch in tree_results:
+            #     if isinstance(result_batch, list):
+            #         trees_flat.extend(result_batch)
+            #     else:
+            #         trees_flat.append(result_batch)
+            
+        else:
+            # Sequential
+            for token_data, sentence in zip(token_data_flat, flat_sentences):
+                try:
+                    if token_data and sentence:
+                        tree = self._build_tree(token_data, sentence)
+                        if tree:
+                            trees_flat.append(tree)
+                        else:
+                            trees_flat.append(None)
                     else:
                         trees_flat.append(None)
-                else:
+                except Exception as e:
+                    self.logger.error(f"Error while building tree from diaparser data for: {sentence}: {e}")
                     trees_flat.append(None)
-            except Exception as e:
-                self.logger.error(f"Error while building tree from diaparser data for: {sentence}: {e}")
-                trees_flat.append(None)
         self.logger.info(f"tree building in diaparser took: {time.time()-build_time}")
         gc.collect()
         if torch.cuda.is_available():
@@ -125,9 +223,9 @@ class DiaParserTreeParser(BaseTreeParser):
 
         return trees_flat
     
-    def parse_batch(self, sentence_groups: List[List[str]], num_workers: int = 1) -> List[List[DependencyTree]]:
+    def parse_batch(self, sentence_groups: List[List[str]]) -> List[List[DependencyTree]]:
         self.logger.debug(f"Parsing batch of {len(sentence_groups)} sentence groups")
-        tree_groups = [self.parse_single(group, num_workers=num_workers) for group in sentence_groups]
+        tree_groups = [self.parse_single(group) for group in sentence_groups]
         if len(tree_groups) < 1:
             self.logger.warning("No valid trees produced from batch")
             tree_groups = [[None for _ in group] for group in sentence_groups]
@@ -136,7 +234,7 @@ class DiaParserTreeParser(BaseTreeParser):
             torch.cuda.empty_cache()
         return tree_groups
     
-    def parse_single(self, sentences: List[str], num_workers: int = 1) -> List[DependencyTree]:
+    def parse_single(self, sentences: List[str]) -> List[DependencyTree]:
         """Parse a single sentence group into a dependency tree group"""
         self.logger.debug(f"Parsing group of {len(sentences)} sentences")
         # return self.parse_batch([sentence])[0]
@@ -144,7 +242,7 @@ class DiaParserTreeParser(BaseTreeParser):
         trees = []
         valid_sentences = []
 
-        token_lists = self.parallel_preprocess_tokenize(sentences, num_workers)
+        token_lists = self.parallel_preprocess_tokenize(sentences)
 
         for tokens, sentence in zip(token_lists, sentences):
 
@@ -192,6 +290,25 @@ class DiaParserTreeParser(BaseTreeParser):
                 self.logger.error(f"Error while building tree from diaparser data for: {sentence}: {e}")
                 trees.append(None)
         return trees
+
+    # def _build_tree_batch(self, tree_data_batch: List[Tuple[Dict, str]]) -> List[DependencyTree]:
+    #     """Build trees from a batch of token data"""
+    #     trees = []
+    #     
+    #     for token_data, sentence in tree_data_batch:
+    #         try:
+    #             if token_data is None or not sentence:
+    #                 trees.append(None)
+    #                 continue
+    #             
+    #             tree = self._build_tree(token_data, sentence)
+    #             trees.append(tree)
+    #             
+    #         except Exception as e:
+    #             self.logger.error(f"Error building tree for sentence '{sentence}': {e}")
+    #             trees.append(None)
+    #     
+    #     return trees
 
     def _build_tree(self, token_data: Dict, sentence: str) -> DependencyTree:
         # Step 1: Create all nodes

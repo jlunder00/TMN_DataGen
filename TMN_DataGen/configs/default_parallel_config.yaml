@@ -1,0 +1,27 @@
+# TMN_DataGen/configs/default_parallel_config.yaml
+parallelization:
+  # Enable/disable parallelization for specific operations
+  tree_group_assembly: true
+  infonce_conversion: true  
+  preprocessing: true
+  validity_checking: true
+  enhancement: true
+  reassembly: true
+  diaparser_processing: true
+  tree_building: true
+  spacy_conversion: true
+  spacy_parsing: false  # Keep false if SpaCy uses GPU
+  
+  # General settings
+  min_items_for_parallel: 100  # Minimum items before using parallelization
+  auto_chunk_size: true  # Automatically calculate optimal chunk sizes
+  
+  # Specific chunk sizes (if auto_chunk_size is false)
+  chunk_sizes:
+    tree_group_assembly: 50
+    infonce_conversion: 20  # Smaller chunks for complex operations
+    preprocessing: 100
+    validity_checking: 200
+    enhancement: 30
+    tree_building: 25
+    spacy_conversion: 25

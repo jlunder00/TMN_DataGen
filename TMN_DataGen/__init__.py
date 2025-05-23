@@ -11,11 +11,13 @@ from .utils import FeatureExtractor
 from .utils.viz_utils import print_tree_text, visualize_tree_graphviz, format_tree_pair
 from .utils.text_preprocessing import BasePreprocessor 
 from .utils.tokenizers import BaseTokenizer, RegexTokenizer, StanzaTokenizer
+from .utils.parallel_framework import ParallelizationMixin
 
 __all__ = [
     'Node', 'DependencyTree',
     'DiaParserTreeParser', 'SpacyTreeParser', 'MultiParser',
     'DatasetGenerator', 'FeatureExtractor',
     'print_tree_text', 'visualize_tree_graphviz', 'format_tree_pair',
-    'BasePreprocessor', 'BaseTokenizer', 'RegexTokenizer', 'StanzaTokenizer'
+    'BasePreprocessor', 'BaseTokenizer', 'RegexTokenizer', 'StanzaTokenizer',
+    'ParallelizationMixin'
 ]
