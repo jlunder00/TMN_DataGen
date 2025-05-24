@@ -6,14 +6,14 @@ parallelization:
   preprocessing: true
   validity_checking: false #true
   enhancement: false #true
-  reassembly: false #true
+  reassembly: true
   diaparser_processing: false #true
   tree_building: false #true
   spacy_conversion: false #true
-  spacy_parsing: false  # Keep false if SpaCy uses GPU
+  spacy_parsing: false #true # Keep false if SpaCy uses GPU
   
   # General settings
-  min_items_for_parallel: 100  # Minimum items before using parallelization
+  min_items_for_parallel: 200  # Minimum items before using parallelization
   auto_chunk_size: true  # Automatically calculate optimal chunk sizes
   
   # Specific chunk sizes (if auto_chunk_size is false)

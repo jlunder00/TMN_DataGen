@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from omegaconf import DictConfig
 import numpy as np
 import torch, gc
-from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _diaparser_build_tree_worker
+from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _diaparser_build_tree_worker, _diaparser_process_prediction_worker
 
 class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
     def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs=[set({})], logger=None, max_concurrent=1, num_workers=1):
@@ -81,24 +81,26 @@ class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
             processing_results = batch_parallel_process(
                 sentence_data,
                 # lambda batch: self._process_prediction_batch(batch) if isinstance(batch, list) else [self._process_prediction_batch([batch])[0]],
-                lambda item: self._process_prediction_batch([item]),
+                _diaparser_process_prediction_worker,
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
                 maintain_order=True,
                 min_items=self._get_min_items_for_parallel()
             )
             
-            # Flatten and sort results to maintain order
-            flattened_results = []
-            for result_batch in processing_results:
-                if isinstance(result_batch, list):
-                    flattened_results.extend(result_batch)
-                else:
-                    flattened_results.append(result_batch)
-            
-            # Sort by index and extract token data
-            flattened_results.sort(key=lambda x: x[0])
-            token_data_group = [result[1] for result in flattened_results if result[1] is not None]
+            # # Flatten and sort results to maintain order
+            # flattened_results = []
+            # for result_batch in processing_results:
+            #     if isinstance(result_batch, list):
+            #         flattened_results.extend(result_batch)
+            #     else:
+            #         flattened_results.append(result_batch)
+            # 
+            # # Sort by index and extract token data
+            # flattened_results.sort(key=lambda x: x[0])
+            # token_data_group = [result[1] for result in flattened_results if result[1] is not None]
+            processing_results.sort(key=lambda x: x[0])
+            token_data_group = [result[1] for result in processing_results if result[1] is not None]
             
         else:
             token_data_group = []
@@ -184,7 +186,7 @@ class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
             # tree_build_data = [(token_data, sentence) 
             #                   for token_data, sentence in zip(token_data_flat, flat_sentences)]
             
-            chunk_size = self._get_chunk_size('tree_building', 25, len(tree_build_data))
+            chunk_size = self._get_chunk_size('tree_building', 25, len(tree_build_args))
             
             # Build trees in parallel
             tree_results = batch_parallel_process(

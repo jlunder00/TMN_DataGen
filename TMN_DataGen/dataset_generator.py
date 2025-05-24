@@ -314,6 +314,7 @@ class DatasetGenerator(ParallelizationMixin):
         is_paired = self.config.output_format and self.config.output_format.get('paired', False)
         self_paired = self.config.output_format and self.config.output_format.get('self_paired', False)
         self.preprocessor = BasePreprocessor(self.config)
+        start = time.time()
 
         # Split sentences and track groups
         if self.parallel_config.get('preprocessing', True) and len(text_pairs) >= self._get_min_items_for_parallel() and self.num_workers > 1:
@@ -342,12 +343,21 @@ class DatasetGenerator(ParallelizationMixin):
                 min_items=self._get_min_items_for_parallel()
             )
 
-            # Combine results
+            # # Combine results
+            # sentence_groups = []
+            # group_metadata = []
+            # for sentence_groups_batch, group_metadata_batch in preprocessing_results:
+            #     sentence_groups.extend(sentence_groups_batch)
+            #     group_metadata.extend(group_metadata_batch)
+            # 
+            # # Filter out None entries
+            # group_metadata = [meta for meta in group_metadata if meta is not None]
             sentence_groups = []
             group_metadata = []
-            for sentence_groups_batch, group_metadata_batch in preprocessing_results:
-                sentence_groups.extend(sentence_groups_batch)
-                group_metadata.extend(group_metadata_batch)
+            for result in preprocessing_results:
+                if result is not None:
+                    group_metadata.append(result['metadata'])
+                    sentence_groups.extend(result['sentence_groups'])
             
             # Filter out None entries
             group_metadata = [meta for meta in group_metadata if meta is not None]
@@ -355,7 +365,6 @@ class DatasetGenerator(ParallelizationMixin):
             sentence_groups = []
             group_metadata = []
             
-            start = time.time()
             for i, (text1, text2) in enumerate(text_pairs):
                 # Split into sentences
                 text2_clean = text2
@@ -491,61 +500,61 @@ class DatasetGenerator(ParallelizationMixin):
         """Convert to InfoNCE format with group tracking"""
         
         conversion_start = time.time()
-        if self.parallel_config.get('infonce_conversion', True) and len(tree_groups) >= self._get_min_items_for_parallel() and self.num_workers > 1:
-            # Parallel
-            self.logger.info("Using parallel InfoNCE conversion")
+        # if self.parallel_config.get('infonce_conversion', True) and len(tree_groups) >= self._get_min_items_for_parallel() and self.num_workers > 1:
+        #     # Parallel
+        #     self.logger.info("Using parallel InfoNCE conversion")
 
-            chunk_size = self._get_chunk_size('infonce_conversion', 20, len(tree_groups))
+        #     chunk_size = self._get_chunk_size('infonce_conversion', 20, len(tree_groups))
 
-            worker_args = [(group, is_paired, self_paired) for group in tree_groups]
-            
-            # Process tree groups in parallel
-            groups_batches = batch_parallel_process(
-                worker_args,
-                _infonce_conversion_worker, 
-                num_workers=self.num_workers,
-                chunk_size=chunk_size,  # Smaller chunks for complex operations
-                maintain_order=True,
-                min_items=self._get_min_items_for_parallel()
-            )
-            
-            # Flatten results
-            groups = []
-            for batch in groups_batches:
-                groups.extend(batch)
-            
-        else:
-            # Sequential
-            groups = []
-            
-            for group in tree_groups:
-                group_data = self._convert_single_tree_group_to_infonce(group, is_paired, self_paired)
-                if group_data:
-                    groups.append(group_data)
-                # # Convert all trees to graph format
-                # trees1 = [
-                #     t.to_graph_data() for t in group.trees 
-                #     if t is not None
-                # ]
-                # if is_paired:
-                #     trees2 = [
-                #         t.to_graph_data() for t in group.trees_b
-                #         if t is not None
-                #     ]
-                # 
-                # add = (not is_paired and trees1) or (is_paired and trees1 and trees2) or (self_paired and trees1)
+        #     worker_args = [(group, is_paired, self_paired) for group in tree_groups]
+        #     
+        #     # Process tree groups in parallel
+        #     groups_batches = batch_parallel_process(
+        #         worker_args,
+        #         _infonce_conversion_worker, 
+        #         num_workers=self.num_workers,
+        #         chunk_size=chunk_size,  # Smaller chunks for complex operations
+        #         maintain_order=True,
+        #         min_items=self._get_min_items_for_parallel()
+        #     )
+        #     
+        #     # Flatten results
+        #     groups = []
+        #     for batch in groups_batches:
+        #         groups.extend(batch)
+        #     
+        # else:
+        # Sequential
+        groups = []
+        
+        for group in tree_groups:
+            group_data = self._convert_single_tree_group_to_infonce(group, is_paired, self_paired)
+            if group_data:
+                groups.append(group_data)
+            # # Convert all trees to graph format
+            # trees1 = [
+            #     t.to_graph_data() for t in group.trees 
+            #     if t is not None
+            # ]
+            # if is_paired:
+            #     trees2 = [
+            #         t.to_graph_data() for t in group.trees_b
+            #         if t is not None
+            #     ]
+            # 
+            # add = (not is_paired and trees1) or (is_paired and trees1 and trees2) or (self_paired and trees1)
 
-                # if add:  # Only add if both have valid trees
-                #     group_data = {
-                #         "group_id": group.group_id,
-                #         "text": group.original_text,
-                #         "trees": trees1,
-                #         "label": group.label
-                #     }
-                #     if is_paired:
-                #         group_data['text_b'] = group.original_text_b
-                #         group_data['trees_b'] = trees2
-                #     groups.append(group_data)
+            # if add:  # Only add if both have valid trees
+            #     group_data = {
+            #         "group_id": group.group_id,
+            #         "text": group.original_text,
+            #         "trees": trees1,
+            #         "label": group.label
+            #     }
+            #     if is_paired:
+            #         group_data['text_b'] = group.original_text_b
+            #         group_data['trees_b'] = trees2
+            #     groups.append(group_data)
         self.logger.info(f"InfoNCE conversion took {(time.time()-conversion_start):.2f}s")
 
         return {

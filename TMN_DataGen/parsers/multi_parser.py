@@ -14,7 +14,7 @@ from ..tree.dependency_tree import DependencyTree
 from ..tree.node import Node
 import yaml
 from pathlib import Path
-from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _multiparser_validate_token_worker, _multiparser_enhance_tree_worker
+from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _multiparser_validate_token_single_worker, _multiparser_enhance_tree_single_worker, _reassembly_worker
 from concurrent.futures import ProcessPoolExecutor
 
 class MultiParser(BaseTreeParser, ParallelizationMixin):
@@ -135,25 +135,31 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
             self.logger.info("Using parallel validity checking")
             
             # Prepare validation data
+            # validation_data = []
+            # for i, tokens in enumerate(token_lists):
+            #     group_index, sentence_index = index_map[i]
+            #     sentence = flat_sentences[i]
+            #     validation_data.append((
+            #         i, tokens, group_index, sentence_index, sentence, 
+            #         max_trees, valid_count[group_index]
+            #     ))
             validation_data = []
             for i, tokens in enumerate(token_lists):
                 group_index, sentence_index = index_map[i]
                 sentence = flat_sentences[i]
                 validation_data.append((
-                    i, tokens, group_index, sentence_index, sentence, 
-                    max_trees, valid_count[group_index]
+                    i, tokens, group_index, sentence_index, sentence, self.config
                 ))
+
             
             chunk_size = self._get_chunk_size('validity_checking', 100, len(validation_data))
 
-            validation_args = [(validation_data[i:i+chunk_size], self.config) 
-                      for i in range(0, len(validation_data), chunk_size)]
 
             
             # Process validation in parallel
             validation_results = batch_parallel_process(
-                validation_args,
-                _multiparser_validate_token_worker,
+                validation_data,
+                _multiparser_validate_token_single_worker,
                 # lambda batch: self._validate_token_batch(batch) if isinstance(batch, list) else [self._validate_token_batch([batch])[0]],
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
@@ -261,17 +267,16 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
             for idx, (group_index, sentence_index) in enumerate(index_map):
                 base_tree = base_results[idx]
                 parser_results_for_idx = {name: parser_results[name][idx] for name in self.parsers}
-                enhancement_data.append((idx, base_tree, parser_results_for_idx, group_index, sentence_index))
+                enhancement_data.append((idx, base_tree, parser_results_for_idx, group_index, sentence_index, self.config))
             
             
             chunk_size = self._get_chunk_size('enhancement', 30, len(enhancement_data))
             
-            enhancement_args = [(enhancement_data[i:i+chunk_size], self.config) for i in range(0, len(enhancement_data), chunk_size)]
 
             # Process enhancement in parallel
             enhancement_results = batch_parallel_process(
-                enhancement_args,
-                _multiparser_enhance_tree_worker,
+                enhancement_data,
+                _multiparser_enhance_tree_single_worker,
                 # lambda batch: self._enhance_tree_batch(batch) if isinstance(batch, list) else [self._enhance_tree_batch([batch])[0]],
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
@@ -311,43 +316,37 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
 
         reassembly_time = time.time()
         # Reassemble the final results back into the original grouping/shape.
-        if self.parallel_config.get('reassembly', True) and len(sentence_groups) >= self._get_min_items_for_parallel() and self.num_workers > 1:
-            self.logger.info("Using parallel reassembly")
-            
-            # Create output structure
-            final_groups = [[None] * len(group) for group in sentence_groups]
-            
-            # Prepare reassembly data
-            reassembly_data = [(idx, group_index, sentence_index, final_results_flat[idx]) 
-                              for idx, (group_index, sentence_index) in enumerate(index_map)]
-            
-            def reassembly_worker(batch):
-                assignments = []
-                for idx, group_index, sentence_index, tree in batch:
-                    assignments.append((group_index, sentence_index, tree))
-                return assignments
-            
-            chunk_size = self._get_chunk_size('reassembly', 200, len(reassembly_data))
+        # if self.parallel_config.get('reassembly', True) and len(sentence_groups) >= self._get_min_items_for_parallel() and self.num_workers > 1:
+        #     self.logger.info("Using parallel reassembly")
+        #     
+        #     # Create output structure
+        #     final_groups = [[None] * len(group) for group in sentence_groups]
+        #     
+        #     # Prepare reassembly data
+        #     reassembly_data = [(idx, group_index, sentence_index, final_results_flat[idx]) 
+        #                       for idx, (group_index, sentence_index) in enumerate(index_map)]
+        #     
+        #     chunk_size = self._get_chunk_size('reassembly', 200, len(reassembly_data))
 
-            # Process reassembly in parallel
-            assignment_batches = batch_parallel_process(
-                reassembly_data,
-                reassembly_worker,
-                num_workers=self.num_workers,
-                chunk_size=chunk_size,
-                maintain_order=False,  # Order doesn't matter for assignment
-                min_items=self._get_min_items_for_parallel()
-            )
-            
-            # Apply assignments
-            for assignment_batch in assignment_batches:
-                for group_index, sentence_index, tree in assignment_batch:
-                    final_groups[group_index][sentence_index] = tree
-            
-        else:
-            final_groups = [ [None] * len(group) for group in sentence_groups ]
-            for idx, (group_index, sentence_index) in enumerate(index_map):
-                final_groups[group_index][sentence_index] = final_results_flat[idx]
+        #     # Process reassembly in parallel
+        #     assignment_batches = batch_parallel_process(
+        #         reassembly_data,
+        #         _reassembly_worker,
+        #         num_workers=self.num_workers,
+        #         chunk_size=chunk_size,
+        #         maintain_order=False,  # Order doesn't matter for assignment
+        #         min_items=self._get_min_items_for_parallel()
+        #     )
+        #     
+        #     # Apply assignments
+        #     for assignment_batch in assignment_batches:
+        #         for group_index, sentence_index, tree in assignment_batch:
+        #             final_groups[group_index][sentence_index] = tree
+        #     
+        # else:
+        final_groups = [ [None] * len(group) for group in sentence_groups ]
+        for idx, (group_index, sentence_index) in enumerate(index_map):
+            final_groups[group_index][sentence_index] = final_results_flat[idx]
         self.logger.info(f"reassembly time in multiparser took: {time.time() - reassembly_time} seconds")
         gc.collect()
         if torch.cuda.is_available():
