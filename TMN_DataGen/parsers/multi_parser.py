@@ -5,7 +5,7 @@ import time
 import copy
 import torch
 import gc
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple, List
 from omegaconf import DictConfig
 from .base_parser import BaseTreeParser
 from .diaparser_impl import DiaParserTreeParser
@@ -14,7 +14,7 @@ from ..tree.dependency_tree import DependencyTree
 from ..tree.node import Node
 import yaml
 from pathlib import Path
-from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process
+from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _multiparser_validate_token_worker, _multiparser_enhance_tree_worker
 from concurrent.futures import ProcessPoolExecutor
 
 class MultiParser(BaseTreeParser, ParallelizationMixin):
@@ -24,6 +24,8 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
 
         # Initialize base class
         super().__init__(config, pkg_config, vocabs, logger, max_concurrent, num_workers)
+
+        ParallelizationMixin.__init__(self)
 
         # Validate user's feature source config against capabilities
         self._validate_feature_sources()
@@ -128,7 +130,7 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
         validity_time = time.time()
         valid_count = {group_index: 0 for group_index, _ in enumerate(sentence_groups)} # per-group counter for valid sentences
 
-        if self.parallel_config.get('validity_checking', True) and len(token_lists) >= 200:
+        if self.parallel_config.get('validity_checking', True) and len(token_lists) >= self._get_min_items_for_parallel() and self.num_workers > 1:
             # Parallel
             self.logger.info("Using parallel validity checking")
             
@@ -143,14 +145,20 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
                 ))
             
             chunk_size = self._get_chunk_size('validity_checking', 100, len(validation_data))
+
+            validation_args = [(validation_data[i:i+chunk_size], self.config) 
+                      for i in range(0, len(validation_data), chunk_size)]
+
             
             # Process validation in parallel
             validation_results = batch_parallel_process(
-                validation_data,
-                lambda batch: self._validate_token_batch(batch) if isinstance(batch, list) else [self._validate_token_batch([batch])[0]],
+                validation_args,
+                _multiparser_validate_token_worker,
+                # lambda batch: self._validate_token_batch(batch) if isinstance(batch, list) else [self._validate_token_batch([batch])[0]],
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
-                maintain_order=True
+                maintain_order=True,
+                min_items=self._get_min_items_for_parallel()
             )
             
             # Flatten results and apply max_trees constraint sequentially
@@ -244,7 +252,7 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
 
         enhancement_time = time.time()
 
-        if self.parallel_config.get('enhancement', True) and len(index_map) >= 100:
+        if self.parallel_config.get('enhancement', True) and len(index_map) >= self._get_min_items_for_parallel() and self.num_workers > 1:
             # Parallel
             self.logger.info("Using parallel tree enhancement")
             
@@ -255,15 +263,20 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
                 parser_results_for_idx = {name: parser_results[name][idx] for name in self.parsers}
                 enhancement_data.append((idx, base_tree, parser_results_for_idx, group_index, sentence_index))
             
+            
             chunk_size = self._get_chunk_size('enhancement', 30, len(enhancement_data))
+            
+            enhancement_args = [(enhancement_data[i:i+chunk_size], self.config) for i in range(0, len(enhancement_data), chunk_size)]
 
             # Process enhancement in parallel
             enhancement_results = batch_parallel_process(
-                enhancement_data,
-                lambda batch: self._enhance_tree_batch(batch) if isinstance(batch, list) else [self._enhance_tree_batch([batch])[0]],
+                enhancement_args,
+                _multiparser_enhance_tree_worker,
+                # lambda batch: self._enhance_tree_batch(batch) if isinstance(batch, list) else [self._enhance_tree_batch([batch])[0]],
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
-                maintain_order=True
+                maintain_order=True,
+                min_items = self._get_min_items_for_parallel()
             )
             
             # Apply results
@@ -298,7 +311,7 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
 
         reassembly_time = time.time()
         # Reassemble the final results back into the original grouping/shape.
-        if self.parallel_config.get('reassembly', True) and len(sentence_groups) >= 50:
+        if self.parallel_config.get('reassembly', True) and len(sentence_groups) >= self._get_min_items_for_parallel() and self.num_workers > 1:
             self.logger.info("Using parallel reassembly")
             
             # Create output structure
@@ -322,7 +335,8 @@ class MultiParser(BaseTreeParser, ParallelizationMixin):
                 reassembly_worker,
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
-                maintain_order=False  # Order doesn't matter for assignment
+                maintain_order=False,  # Order doesn't matter for assignment
+                min_items=self._get_min_items_for_parallel()
             )
             
             # Apply assignments

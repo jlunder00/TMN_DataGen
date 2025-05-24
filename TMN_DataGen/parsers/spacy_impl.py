@@ -9,12 +9,13 @@ import spacy
 from typing import List, Any, Optional
 from omegaconf import DictConfig
 import torch, gc
-from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _spacy_parse_worker
+from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _spacy_parse_worker, _spacy_convert_to_tree_worker
 from concurrent.futures import ProcessPoolExecutor
 
 class SpacyTreeParser(BaseTreeParser, ParallelizationMixin):
     def __init__(self, config: Optional[DictConfig] = None, pkg_config = None, vocabs = [set({})], logger = None, max_concurrent=1, num_workers=1):
         super().__init__(config, pkg_config, vocabs, logger, max_concurrent, num_workers)
+        ParallelizationMixin.__init__(self)
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_core_web_sm')
             self.model_name = model_name  # Store for workers
@@ -34,7 +35,7 @@ class SpacyTreeParser(BaseTreeParser, ParallelizationMixin):
         if valid_texts_with_indices:
             valid_indices, valid_texts = zip(*valid_texts_with_indices)
             if (self.parallel_config.get('spacy_parsing', True) and 
-                len(valid_texts) >= 100 and 
+                len(valid_texts) >= self._get_min_items_for_parallel() and 
                 self.num_workers > 1):
                 
                 self.logger.info("Using parallel SpaCy parsing")
@@ -67,14 +68,17 @@ class SpacyTreeParser(BaseTreeParser, ParallelizationMixin):
 
         # Convert each Doc to a DependencyTree.
         convert_time = time.time()
-        if self.parallel_config.get('spacy_conversion', True) and len(flat_sentences) >= 50:
+        if self.parallel_config.get('spacy_conversion', True) and len(flat_sentences) >= self._get_min_items_for_parallel() and self.num_workers > 1:
             # Parallel
             self.logger.info("Using parallel SpaCy tree conversion")
             
             # Prepare conversion data
-            conversion_data = [(orig_sentence, doc) for orig_sentence, doc in zip(flat_sentences, docs)]
+            # conversion_data = [(orig_sentence, doc) for orig_sentence, doc in zip(flat_sentences, docs)]
+            conversion_args = []
+            for orig_sentence, doc in zip(flat_sentences, docs):
+                conversion_args.append((orig_sentence, doc, self.config))
             
-            chunk_size = self._get_chunk_size('spacy_conversion', 25, len(conversion_data))
+            chunk_size = self._get_chunk_size('spacy_conversion', 25, len(conversion_args))
 
             # Convert docs to trees in parallel
             # tree_results = batch_parallel_process(
@@ -85,8 +89,9 @@ class SpacyTreeParser(BaseTreeParser, ParallelizationMixin):
             #     maintain_order=True
             # )
             tree_results = batch_parallel_process(
-                conversion_data,
-                lambda item: self._convert_to_tree(item[0], item[1]) if item[1] is not None else None,
+                conversion_args,
+                _spacy_convert_to_tree_worker,
+                # lambda item: self._convert_to_tree(item[0], item[1]) if item[1] is not None else None,
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
                 maintain_order=True

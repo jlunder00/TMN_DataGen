@@ -10,11 +10,11 @@ from typing import List, Dict, Any, Optional, Tuple
 from omegaconf import DictConfig
 import numpy as np
 import torch, gc
-from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process
+from ..utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _diaparser_build_tree_worker
 
 class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
     def __init__(self, config: Optional[DictConfig] = None, pkg_config=None, vocabs=[set({})], logger=None, max_concurrent=1, num_workers=1):
-        super().__init__(config, pkg_config, vocabs, logger, max_concurrent=max_concurrent, num_workers)
+        super().__init__(config, pkg_config, vocabs, logger, max_concurrent=max_concurrent, num_workers=num_workers)
         ParallelizationMixin.__init__(self)
         if not hasattr(self, 'model'):
             model_name = self.config.get('model_name', 'en_ewt.electra-base')
@@ -68,7 +68,7 @@ class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
             List of Dict with keys: words, lemmas, pos_tags, heads, rels
             All lists are aligned by token position
         """
-        if self.parallel_config.get('diaparser_processing', True) and len(dataset.sentences) >= 100:
+        if self.parallel_config.get('diaparser_processing', True) and len(dataset.sentences) >= self._get_min_items_for_parallel() and self.num_workers > 1:
             # Parallel
             self.logger.info("Using parallel DiaParser prediction processing")
             
@@ -84,7 +84,8 @@ class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
                 lambda item: self._process_prediction_batch([item]),
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
-                maintain_order=True
+                maintain_order=True,
+                min_items=self._get_min_items_for_parallel()
             )
             
             # Flatten and sort results to maintain order
@@ -172,24 +173,29 @@ class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
         self.logger.info(f"parsing in diaparser parser took: {time.time()-parse_time}")
             
         build_time = time.time()
-        if self.parallel_config.get('tree_building', True) and len(token_data_flat) >= 50:
+        if self.parallel_config.get('tree_building', True) and len(token_data_flat) >= self._get_min_items_for_parallel() and self.num_workers > 1:
             # Parallel
             self.logger.info("Using parallel tree building")
             
             # Prepare tree building data
-            tree_build_data = [(token_data, sentence) 
-                              for token_data, sentence in zip(token_data_flat, flat_sentences)]
+            tree_build_args = []
+            for token_data, sentence in zip(token_data_flat, flat_sentences):
+                tree_build_args.append((token_data, sentence, self.config))
+            # tree_build_data = [(token_data, sentence) 
+            #                   for token_data, sentence in zip(token_data_flat, flat_sentences)]
             
             chunk_size = self._get_chunk_size('tree_building', 25, len(tree_build_data))
             
             # Build trees in parallel
             tree_results = batch_parallel_process(
-                tree_build_data,
+                tree_build_args,
                 # lambda batch: self._build_tree_batch(batch) if isinstance(batch, list) else [self._build_tree_batch([batch])[0]],
-                lambda item: self._build_tree(item[0], item[1]) if item[0] and item[1] else None,
+                # lambda item: self._build_tree(item[0], item[1]) if item[0] and item[1] else None,
+                _diaparser_build_tree_worker,
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
-                maintain_order=True
+                maintain_order=True,
+                min_items = self._get_min_items_for_parallel()
             )
             
             trees_flat = tree_results

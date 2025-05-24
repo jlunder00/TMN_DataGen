@@ -1,15 +1,15 @@
 # TMN_DataGen/configs/default_parallel_config.yaml
 parallelization:
   # Enable/disable parallelization for specific operations
-  tree_group_assembly: true
-  infonce_conversion: true  
+  tree_group_assembly: false #true
+  infonce_conversion: false #true  
   preprocessing: true
-  validity_checking: true
-  enhancement: true
-  reassembly: true
-  diaparser_processing: true
-  tree_building: true
-  spacy_conversion: true
+  validity_checking: false #true
+  enhancement: false #true
+  reassembly: false #true
+  diaparser_processing: false #true
+  tree_building: false #true
+  spacy_conversion: false #true
   spacy_parsing: false  # Keep false if SpaCy uses GPU
   
   # General settings

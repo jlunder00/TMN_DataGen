@@ -15,7 +15,7 @@ from importlib.resources import files
 import uuid
 from english_words import get_english_words_set
 from gensim.models import KeyedVectors
-from .utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _process_text_pair_worker
+from .utils.parallel_framework import ParallelizationMixin, batch_parallel_process, _preprocessing_task_worker, _infonce_conversion_worker, _tree_group_assembly_worker
 from concurrent.futures import ProcessPoolExecutor
 import time
 
@@ -316,31 +316,36 @@ class DatasetGenerator(ParallelizationMixin):
         self.preprocessor = BasePreprocessor(self.config)
 
         # Split sentences and track groups
-        if self.parallel_config.get('preprocessing', True) and len(text_pairs) >= 100 and self.num_workers > 1:
+        if self.parallel_config.get('preprocessing', True) and len(text_pairs) >= self._get_min_items_for_parallel() and self.num_workers > 1:
             self.logger.info("Using parallel preprocessing and sentence splitting")
             # Prepare data with original indices for tracking
-            indexed_text_pairs = [(text1, text2, i) for i, (text1, text2) in enumerate(text_pairs)]
+            # indexed_text_pairs = [(text1, text2, i) for i, (text1, text2) in enumerate(text_pairs)]
+            preprocessing_tasks = []
+            for i, (text1, text2) in enumerate(text_pairs):
+                preprocessing_tasks.append({
+                    'text1': text1,
+                    'text2': text2,
+                    'label': labels[i],
+                    'is_paired': is_paired,
+                    'config': self.config.preprocessing
+                })
             
-            chunk_size = self._get_chunk_size('preprocessing', 100, len(indexed_text_pairs))
+            chunk_size = self._get_chunk_size('preprocessing', 100, len(preprocessing_tasks))
 
-            chunks = [indexed_text_pairs[i:i + chunk_size] 
-                     for i in range(0, len(indexed_text_pairs), chunk_size)]
-            
-            # Process chunks in parallel
-            with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
-                chunk_args = [(chunk, is_paired, labels, 
-                              self.config.preprocessing, {}) 
-                             for chunk in chunks]
-                chunk_results = list(executor.map(_process_text_pair_worker, chunk_args))
-                # chunk_results = list(executor.map(
-                #     lambda chunk: self._process_text_pair_batch(chunk, is_paired, labels),
-                #     chunks
-                # ))
-            
+            preprocessing_results = batch_parallel_process(
+                # indexed_text_pairs,
+                # lambda item: _process_single_text_pair((item, is_paired, labels, self.config.preprocessing)),
+                preprocessing_tasks,
+                _preprocessing_task_worker,
+                num_workers=self.num_workers,
+                chunk_size=chunk_size,
+                min_items=self._get_min_items_for_parallel()
+            )
+
             # Combine results
             sentence_groups = []
             group_metadata = []
-            for sentence_groups_batch, group_metadata_batch in chunk_results:
+            for sentence_groups_batch, group_metadata_batch in preprocessing_results:
                 sentence_groups.extend(sentence_groups_batch)
                 group_metadata.extend(group_metadata_batch)
             
@@ -379,18 +384,30 @@ class DatasetGenerator(ParallelizationMixin):
         self.logger.info(f"Preprocessing took {(time.time()-start):.2f}s")
 
         # Parse all sentences
-        all_tree_groups = parser.parse_all(sentence_groups, show_progress, num_workers=self.num_workers)
+        all_tree_groups = parser.parse_all(sentence_groups, show_progress)
 
         # Organize trees with groups
         assembly_start = time.time()
-        if self.parallel_config.get('tree_group_assembly', True) and len(group_metadata) >= 100:
+        if self.parallel_config.get('tree_group_assembly', True) and len(group_metadata) >= self._get_min_items_for_parallel() and self.num_workers > 1:
             # Parallel
             self.logger.info("Using parallel tree group assembly")
             
             # Prepare data for parallel processing
-            metadata_and_trees = [(meta, all_tree_groups, i) for i, meta in enumerate(group_metadata)]
+            # metadata_and_trees = [(meta, all_tree_groups, i) for i, meta in enumerate(group_metadata)]
+            # Pre-extract the needed trees for each metadata item
+            tree_assembly_data = []
+            for i, meta in enumerate(group_metadata):
+                trees_a = all_tree_groups[i*2] if i*2 < len(all_tree_groups) else []
+                trees_b = [] if not is_paired else (all_tree_groups[i*2+1] if i*2+1 < len(all_tree_groups) else [])
+                
+                tree_assembly_data.append({
+                    'meta': meta,
+                    'trees_a': trees_a,
+                    'trees_b': trees_b,
+                    'is_paired': is_paired
+                })
 
-            chunk_size = self._get_chunk_size('tree_group_assembly', 50, len(metadata_and_trees))
+            chunk_size = self._get_chunk_size('tree_group_assembly', 50, len(tree_assembly_data))
             
             # # Process in parallel
             # tree_groups = batch_parallel_process(
@@ -401,19 +418,27 @@ class DatasetGenerator(ParallelizationMixin):
             # )
 
             tree_groups = batch_parallel_process(
-                metadata_and_trees,
-                lambda item: TreeGroup(
-                    group_id=item[0]['group_id'],
-                    original_text=item[0]['text'],
-                    trees=item[1][item[2]*2] if item[2]*2 < len(item[1]) else [],
-                    original_text_b='' if not is_paired else item[0]['text_b'],
-                    trees_b=[] if not is_paired else (item[1][item[2]*2+1] if item[2]*2+1 < len(item[1]) else []),
-                    label=item[0]['label']
-                ) if item[0] else None,
+                tree_assembly_data,
+                _tree_group_assembly_worker,  
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,
-                maintain_order=True
+                maintain_order=True,
+                min_items=self._get_min_items_for_parallel()
             )
+            # tree_groups = batch_parallel_process(
+            #     metadata_and_trees,
+            #     lambda item: TreeGroup(
+            #         group_id=item[0]['group_id'],
+            #         original_text=item[0]['text'],
+            #         trees=item[1][item[2]*2] if item[2]*2 < len(item[1]) else [],
+            #         original_text_b='' if not is_paired else item[0]['text_b'],
+            #         trees_b=[] if not is_paired else (item[1][item[2]*2+1] if item[2]*2+1 < len(item[1]) else []),
+            #         label=item[0]['label']
+            #     ) if item[0] else None,
+            #     num_workers=self.num_workers,
+            #     chunk_size=chunk_size,
+            #     maintain_order=True
+            # )
             
             # Filter out None entries
             tree_groups = [tg for tg in tree_groups if tg is not None]
@@ -429,9 +454,9 @@ class DatasetGenerator(ParallelizationMixin):
                 group = TreeGroup(
                     group_id=meta['group_id'],
                     original_text=meta['text'],
-                    trees=all_tree_groups[i*2],
+                    trees=all_tree_groups[i*2] if i*2 < len(all_tree_groups) else [],
                     original_text_b= '' if not is_paired else meta['text_b'],
-                    trees_b = [] if not is_paired else all_tree_groups[i*2+1],
+                    trees_b = [] if not is_paired else all_tree_groups[i*2+1] if i*2+1 < len(all_tree_groups) else [],
                     label = meta['label']
                 )
                 tree_groups.append(group)
@@ -466,20 +491,22 @@ class DatasetGenerator(ParallelizationMixin):
         """Convert to InfoNCE format with group tracking"""
         
         conversion_start = time.time()
-        if self.parallel_config.get('infonce_conversion', True) and len(tree_groups) >= 50:
+        if self.parallel_config.get('infonce_conversion', True) and len(tree_groups) >= self._get_min_items_for_parallel() and self.num_workers > 1:
             # Parallel
             self.logger.info("Using parallel InfoNCE conversion")
 
             chunk_size = self._get_chunk_size('infonce_conversion', 20, len(tree_groups))
+
+            worker_args = [(group, is_paired, self_paired) for group in tree_groups]
             
             # Process tree groups in parallel
             groups_batches = batch_parallel_process(
-                tree_groups,
-                lambda group: self._convert_single_tree_group_to_infonce(group, is_paired, self_paired),
-                # lambda group: self._convert_tree_group_to_infonce_batch([group], is_paired, self_paired),
+                worker_args,
+                _infonce_conversion_worker, 
                 num_workers=self.num_workers,
                 chunk_size=chunk_size,  # Smaller chunks for complex operations
-                maintain_order=True
+                maintain_order=True,
+                min_items=self._get_min_items_for_parallel()
             )
             
             # Flatten results
