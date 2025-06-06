@@ -145,22 +145,30 @@ class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
         return token_data_group
         
     def parse_batch_flat(self, flat_sentences, processed_texts: List[str], processed_tokens: List[List[str]]) -> List[List[DependencyTree]]:
+        self.logger.info("parse batch flat now")
         
         trees_flat = []
         valid_token_list_indices = [i for i, tokens in enumerate(processed_tokens) if tokens]
         valid_token_lists = [tokens for tokens in processed_tokens if tokens]
 
         parse_time = time.time()
-        from TMN_DataGen.utils.gpu_coordinator import GPUCoordinator
-        coordinator = GPUCoordinator(max_concurrent=self.max_concurrent if hasattr(self, "max_concurrent") else 1, logger=self.logger)
+        if (self.max_concurrent if hasattr(self, "max_concurrent") else 0) > 0:
+            from TMN_DataGen.utils.gpu_coordinator import GPUCoordinator
+            coordinator = GPUCoordinator(max_concurrent=self.max_concurrent if hasattr(self, "max_concurrent") else 1, logger=self.logger)
 
-        # if coordinator.acquire_gpu(timeout=300):
-        with coordinator:
-            # try:
-            self.logger.info("using GPU for Diaparser prediction")
+            # if coordinator.acquire_gpu(timeout=300):
+            with coordinator:
+                # try:
+                self.logger.info("using GPU for Diaparser prediction")
+                self.model.model = self.model.model.to(torch.device("cuda"))
+                valid_dataset = self.model.predict(valid_token_lists, batch_size=self.diaparser_batch_size)
+                self.model.model = self.model.model.to(torch.device("cpu"))
+        else:
+            self.logger.info("using GPU without coordinator for Diaparser prediction")
             self.model.model = self.model.model.to(torch.device("cuda"))
             valid_dataset = self.model.predict(valid_token_lists, batch_size=self.diaparser_batch_size)
             self.model.model = self.model.model.to(torch.device("cpu"))
+
             # finally:
             #     coordinator.release_gpu()
         # else:
@@ -264,13 +272,19 @@ class DiaParserTreeParser(BaseTreeParser, ParallelizationMixin):
             valid_sentences.append(sentence)
 
         try:
-            from TMN_DataGen.utils.gpu_coordinator import GPUCoordinator
-            coordinator = GPUCoordinator(max_concurrent=self.max_concurrent if hasattr(self, "max_concurrent") else 1, logger=self.logger)
+            if (self.max_concurrent if hasattr(self, "max_concurrent") else 0) > 0:
+                from TMN_DataGen.utils.gpu_coordinator import GPUCoordinator
+                coordinator = GPUCoordinator(max_concurrent=self.max_concurrent if hasattr(self, "max_concurrent") else 1, logger=self.logger)
 
-            # if coordinator.acquire_gpu(timeout=300):
-            with coordinator:
-                # try:
-                self.logger.info("using GPU for Diaparser prediction")
+                # if coordinator.acquire_gpu(timeout=300):
+                with coordinator:
+                    # try:
+                    self.logger.info("using GPU for Diaparser prediction")
+                    self.model.model = self.model.model.to(torch.device("cuda"))
+                    dataset = self.model.predict(tokenized_sentences, batch_size=self.diaparser_batch_size)
+                    self.model.model = self.model.model.to(torch.device("cpu"))
+            else:
+                self.logger.info("Using GPU without coordinator for Diaparser prediction")
                 self.model.model = self.model.model.to(torch.device("cuda"))
                 dataset = self.model.predict(tokenized_sentences, batch_size=self.diaparser_batch_size)
                 self.model.model = self.model.model.to(torch.device("cpu"))

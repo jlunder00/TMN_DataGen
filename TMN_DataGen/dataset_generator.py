@@ -122,6 +122,10 @@ class DatasetGenerator(ParallelizationMixin):
                 with open(merge_config) as f:
                     merge_config = yaml.safe_load(f)
             config['merge'].update(merge_config)
+        self.logger = setup_logger(
+                self.__class__.__name__,
+                verbosity
+                )
 
         return OmegaConf.create(config), pkg_config
 
@@ -273,10 +277,6 @@ class DatasetGenerator(ParallelizationMixin):
             verbosity,
             override_pkg_config
         )
-        self.logger = setup_logger(
-                self.__class__.__name__,
-                verbosity
-                )
 
         self.config = config
         config.feature_extraction.embedding_cache_dir = cache_dir if cache_dir else config.feature_extraction.embedding_cache_dir
