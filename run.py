@@ -784,13 +784,13 @@ if __name__ == '__main__':
                                 required=True,
                                 choices=['snli', 'wiki_qs', 'amazon_qa', 'patentmatch', 'semeval'],
                                 default="snli",
-                                help="Number of worker processes for parallel operations")
+                                help="")
     process_parser.add_argument("-cd", "--cache_dir",
                                 type=Path,
                                 help="Optional cache directory override")
     process_parser.add_argument("-mc", "--max_concurrent",
                                 type=int,
-                                default=1,
+                                default=0,
                                 help="Max concurrent batch processor")
 
 

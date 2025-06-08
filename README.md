@@ -4,9 +4,6 @@
 
 A tool for generating and processing dependency trees for training Graph Matching Networks on natural language inference and text similarity tasks.
 
-## CSCD584 Submission Instructions
-
-This section provides specific instructions for setting up TMN_DataGen for use with the Tree-Matching-Networks package in the CSCD584 submission.    
 Note: this has not been tested in other environments. It is possible there are issues preventing it from working in environments other than my own.    
 
 ### Creating Embedding Cache for Demo or Evaluation
@@ -28,7 +25,8 @@ python -m TMN_DataGen.run process \
   --batch_size 10
   --spacy_model en_core_web_sm \
   --max_lines 100  # Process only 100 lines
-```
+ ```
+TODO: explain concurrency system. Defaults to not being used so should be fine.
 
 2. **Configure cache path**: Ensure the embedding cache path is properly set.
 
@@ -138,7 +136,6 @@ TMN_DataGen supports various datasets. Here are the main ones used and tested:
 - **Description**: Sets of similar questions from Wikipedia
 - **Website**: [https://github.com/afader/oqa#wikianswers-corpus](https://github.com/afader/oqa#wikianswers-corpus)
 - **Download Site**: [https://knowitall.cs.washington.edu/oqa/data/wikianswers/](https://knowitall.cs.washington.edu/oqa/data/wikianswers/)
-    - Used part-000000.gz (The vast majority of pretraining data)
 - **Format**: Tab-separated text files with question groups
 - **Dataset Type**: `wiki_qs`
 - **Status**: Tested with single partition as input, *might* support multiple partitions
